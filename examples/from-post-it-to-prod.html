@@ -1,0 +1,1658 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>From Post-It to Prod</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@500&family=Kalam:wght@700&display=swap">
+<style>
+:root{
+  --board:#F4F6F7; --ink:#1B1E23; --ink-2:#4E5660; --blue:#2455F0; --blue-2:#8EA8FF;
+  --red:#E03A2F; --red-t:#C22A20; --green:#1F9D5A; --green-t:#16804A; --ghost:#CBD2D7; --card:#FFFFFF;
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --body:"Instrument Sans","Helvetica Neue",Arial,sans-serif;
+  --hand:"Kalam","Comic Sans MS","Chalkboard SE",cursive;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --glow:rgba(255,255,255,.95); --glow-2:rgba(255,255,255,.8); --smudge:rgba(200,208,214,.16);
+  --wash:rgba(27,30,35,.06); --rule:#D9DEE2; --tape:rgba(255,232,150,.78); --scrim:rgba(27,30,35,.32);
+  --pw:96px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --board:#14171B; --ink:#E8EBEE; --ink-2:#A6AFB9; --blue:#7F9CFF; --blue-2:#3D5CC4;
+  --red:#FF6B5E; --red-t:#FF8A7F; --green:#3ED48A; --green-t:#5BDB9C; --ghost:#3A424B; --card:#1F242B;
+  --glow:rgba(130,150,185,.07); --glow-2:rgba(130,150,185,.05); --smudge:rgba(255,255,255,.02);
+  --wash:rgba(255,255,255,.08); --rule:#343B44; --tape:rgba(220,190,100,.5); --scrim:rgba(0,0,0,.6);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --board:#14171B; --ink:#E8EBEE; --ink-2:#A6AFB9; --blue:#7F9CFF; --blue-2:#3D5CC4;
+  --red:#FF6B5E; --red-t:#FF8A7F; --green:#3ED48A; --green-t:#5BDB9C; --ghost:#3A424B; --card:#1F242B;
+  --glow:rgba(130,150,185,.07); --glow-2:rgba(130,150,185,.05); --smudge:rgba(255,255,255,.02);
+  --wash:rgba(255,255,255,.08); --rule:#343B44; --tape:rgba(220,190,100,.5); --scrim:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--board)}
+body{margin:0;background:var(--board);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.board-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(60vw 40vh at 18% 8%, var(--glow), transparent 70%),
+    radial-gradient(50vw 50vh at 88% 92%, var(--glow-2), transparent 70%),
+    radial-gradient(28vw 14vh at 70% 30%, var(--smudge), transparent 70%),
+    radial-gradient(22vw 10vh at 25% 75%, var(--smudge), transparent 70%)}
+.symdefs{position:absolute;width:0;height:0;overflow:hidden}
+
+/* stages */
+.st{position:relative;z-index:1;height:calc((1 + var(--len,1.7)) * 100vh)}
+.pin{position:sticky;top:0;height:100vh;overflow:hidden}
+.ln{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.art{position:absolute;overflow:visible;pointer-events:none}
+.ln .guide{fill:none;stroke:var(--blue);stroke-opacity:.3;stroke-width:2.6;stroke-linecap:round;stroke-dasharray:.5 11}
+.ln .ink{fill:none;stroke:var(--blue);stroke-linecap:round;stroke-linejoin:round}
+.ln .streak{fill:none;stroke:var(--blue-2);stroke-opacity:.55;stroke-width:3.5;stroke-linecap:round;stroke-dasharray:50 22 10 34}
+
+/* copy */
+.copy{position:absolute;z-index:3}
+[data-lay="L"] .copy{left:6vw;top:50%;transform:translateY(max(-50%,calc(72px - 50vh)));width:min(33vw,500px)}
+[data-lay="R"] .copy{right:5.5vw;top:50%;transform:translateY(max(-50%,calc(72px - 50vh)));width:min(33vw,500px)}
+[data-lay="T"] .copy{left:6vw;top:max(6vh,72px);width:min(54vw,820px)}
+.eb{display:flex;align-items:center;gap:.75rem;margin:0;font-family:var(--hand);font-weight:700;font-size:1.12rem;color:var(--ink-2);line-height:1}
+.num{display:inline-grid;place-items:center;width:2.35rem;height:2.35rem;border:2.6px solid var(--ink);border-radius:52% 46% 55% 45% / 48% 55% 45% 52%;color:var(--ink);transform:rotate(-7deg);font-size:1.02rem;padding-top:.12rem}
+.eb .num{width:auto;min-width:2.35rem;padding:.12rem .42rem 0;white-space:nowrap}
+.num.x{border-style:dashed;border-color:var(--blue);color:var(--blue)}
+.eb code{font-family:var(--mono);font-size:.74rem;font-weight:500;color:var(--ink-2);background:var(--wash);padding:.28rem .5rem;border-radius:3px}
+.copy h2,.copy h1{font-family:var(--display);font-weight:800;letter-spacing:-.036em;line-height:.96;margin:1.05rem 0 0;text-wrap:balance}
+.copy h2{font-size:clamp(2.4rem,4.3vw,4.5rem)}
+.copy h2 .subh{display:block;font-size:.44em;font-weight:700;letter-spacing:-.015em;line-height:1.1;color:var(--ink-2);margin-top:.28em}
+[data-lay="T"] .copy h2{font-size:clamp(2.2rem,3.7vw,3.9rem)}
+.copy h1{font-size:clamp(3.4rem,7.2vw,7rem);letter-spacing:-.036em}
+.copy h1 .pi{letter-spacing:.012em}
+.copy h1 .hy{margin:0 .035em 0 .02em}
+.sent .dt{font-family:var(--hand);font-weight:700;color:var(--ink)}
+.st .sent+.sent{margin-top:.75rem}
+.sent{margin:1.15rem 0 0;font-size:clamp(1.06rem,1.32vw,1.3rem);line-height:1.5;color:var(--ink-2);max-width:35ch}
+[data-lay="T"] .sent{max-width:46ch}
+#s0 .copy{width:min(40vw,580px)}
+#s0 .sent{max-width:46ch}
+#s0 .hnote{max-width:44ch}
+#s0 .key .legend{margin-top:1.2rem}
+#s0 .cue{margin-top:1.1rem}
+@media (min-width:761px) and (min-aspect-ratio:4/5){
+  #s0 .copy h1{font-size:clamp(2.6rem,min(7.2vw,10.5vh),7rem);margin-top:min(1.05rem,2.1vh)}
+  #s0 .sent{font-size:clamp(1rem,min(1.32vw,2.25vh),1.3rem)}
+  #s0 .hnote{font-size:clamp(.88rem,min(1.2vw,2.1vh),.98rem);margin-top:min(1rem,1.9vh)}
+  #s0 .copy h1+.sent{margin-top:min(1.15rem,2.1vh)}
+  #s0 .sent+.sent{margin-top:min(.8rem,1.5vh)}
+  #s0 .prov{margin-top:min(.55rem,1.1vh)}
+  #s0 .key .legend{margin-top:min(1.2rem,2.2vh)}
+  #s0 .stats{margin-top:min(1.1rem,2vh)}
+  #s0 .cue{margin-top:min(1.1rem,2.1vh)}
+}
+/* short desktop: fold the key away so the hero never outgrows the screen */
+@media (min-width:761px) and (min-aspect-ratio:4/5) and (max-height:860px){
+  #s0 .key>summary{display:inline-flex;align-items:center;gap:.4rem;width:max-content;margin-top:min(1.2rem,2.2vh);padding:.34rem .72rem;border:2px solid var(--ghost);border-radius:999px;background:var(--card);font-family:var(--hand);font-weight:700;font-size:.92rem;color:var(--ink-2);cursor:pointer;list-style:none}
+  #s0 .key>summary::-webkit-details-marker{display:none}
+  #s0 .key>summary::after{content:"+";font-size:1rem;line-height:1}
+  #s0 .key[open]>summary::after{content:"\2013"}
+  #s0 .key .legend{margin-top:min(.9rem,1.7vh);font-size:.9rem;gap:.35rem 1.1rem}
+  #s0 .key .stats{font-size:.7rem;margin-top:.7rem}
+  #s0 .key .hnote{font-size:.88rem;line-height:1.38;margin-top:.7rem}
+  #s0 .key[open]{max-height:max(108px,min(30vh,100vh - 540px));overflow:auto;scrollbar-width:thin;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 20px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 20px),transparent)}
+  #s0 .key[open]~.cue{display:none}
+}
+@media (min-width:761px) and (min-aspect-ratio:4/5) and (max-height:660px){
+  #s0 .cue{margin-top:min(.8rem,1.4vh)}
+}
+/* short desktop windows: compress every stage's rhythm rather than let copy run off */
+@media (min-width:761px) and (min-aspect-ratio:4/5) and (max-height:700px){
+  .copy h2{font-size:clamp(1.85rem,min(4.3vw,7.4vh),4.5rem)}
+  [data-lay="T"] .copy h2{font-size:clamp(1.75rem,min(3.7vw,6.6vh),3.9rem)}
+  .copy h2,.copy h1{margin-top:min(1.05rem,2vh)}
+  .sent{font-size:clamp(.97rem,min(1.32vw,2.2vh),1.3rem);margin-top:min(1.15rem,2vh)}
+  .st .sent+.sent{margin-top:min(.75rem,1.35vh)}
+  .how{margin-top:min(1.4rem,2.3vh)}
+}
+@media (min-width:761px) and (min-aspect-ratio:4/5) and (max-height:620px){
+  .copy h2{font-size:clamp(1.6rem,min(4vw,6.4vh),4.5rem)}
+  [data-lay="T"] .copy h2{font-size:clamp(1.55rem,min(3.4vw,5.8vh),3.9rem)}
+  #s0 .copy h1{font-size:clamp(2.2rem,min(7.2vw,9.2vh),7rem)}
+  .sent{font-size:.93rem;line-height:1.45}
+}
+#s0 .sent+.sent{margin-top:.8rem}
+#s12 .copy{width:min(54vw,820px)}
+#s12 .copy h2{font-size:clamp(2rem,3.3vw,3.5rem)}
+#s12 .sent{max-width:none}
+.key{margin:0}
+.key>summary{display:none}
+.key .legend{margin-top:1.7rem}
+.how{margin-top:1.4rem;display:inline-flex;align-items:center;gap:.45rem;font-family:var(--hand);font-weight:700;font-size:1.15rem;color:var(--blue);background:none;border:0;padding:.3rem 0;cursor:pointer;text-decoration:underline wavy;text-decoration-thickness:1.6px;text-underline-offset:7px}
+.how span{display:inline-block;transition:transform .2s}
+.how:hover span{transform:translateX(4px)}
+:focus-visible{outline:2.5px solid var(--blue);outline-offset:4px;border-radius:3px}
+
+/* hero extras */
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1.4rem;margin-top:1.7rem;font-family:var(--hand);font-weight:700;font-size:1.02rem;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:.5rem}
+.legend svg{width:34px;height:12px;overflow:visible}
+.stats{margin-top:1.1rem;font-family:var(--mono);font-size:.76rem;letter-spacing:.06em;color:var(--ink-2)}
+.prov{margin:.55rem 0 0;font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;color:var(--ink-2);opacity:.8}
+.cue{margin-top:2rem;font-family:var(--hand);font-weight:700;font-size:1.2rem;color:var(--blue);animation:a-bob 2.4s ease-in-out infinite alternate}
+
+.hu{width:1.2em;height:1.2em;flex:0 0 auto;color:var(--red-t)}
+.eb code{display:inline-flex;align-items:center;gap:.42rem}
+.auto{color:var(--blue);font-family:var(--hand);font-weight:700;font-size:1.15em;line-height:1}
+.legend .auto{font-size:1.25rem;width:20px;text-align:center}
+.hnote>span{display:block}
+.hnote b{font-family:var(--mono);font-size:.86em;font-weight:500;color:var(--ink)}
+.legend .hu{width:20px;height:20px}
+.hnote{display:flex;align-items:flex-start;gap:.55rem;margin:1rem 0 0;font-family:var(--hand);font-weight:700;font-size:.98rem;line-height:1.45;color:var(--ink-2);max-width:33ch}
+.hnote .hu{width:19px;height:19px;margin-top:.12rem}
+.card .gates li.hm::before{border-radius:50%;border-color:var(--red-t)}
+.card .gates .hu{width:1.05em;height:1.05em;vertical-align:-.18em;margin-right:.25em}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* art text */
+.t{font-family:var(--hand);font-weight:700;fill:var(--ink)}
+.t2{font-family:var(--hand);font-weight:700;fill:var(--ink-2)}
+.tb{font-family:var(--hand);font-weight:700;fill:var(--blue)}
+.tr{font-family:var(--hand);font-weight:700;fill:var(--red-t)}
+.tg{font-family:var(--hand);font-weight:700;fill:var(--green-t)}
+.tm{font-family:var(--mono);font-weight:500;fill:var(--ink-2)}
+.stt{font-family:var(--display);font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+
+/* beats */
+.bt{opacity:0;transition:opacity .35s ease}
+.bt.on,.bt.keep{opacity:1}
+.bt path.dr{stroke-dasharray:1 1;stroke-dashoffset:1;transition:stroke-dashoffset .85s cubic-bezier(.35,.6,.3,1)}
+.bt.on path.dr{stroke-dashoffset:0}
+.stamp path.dr,.fd path.dr,.pop path.dr,.keep path.dr{stroke-dasharray:none!important;stroke-dashoffset:0!important}
+.stamp{transform:scale(1.9) rotate(var(--r,-8deg));transform-box:fill-box;transform-origin:center;transition:transform .32s cubic-bezier(.2,1.5,.4,1),opacity .12s}
+.stamp.on{transform:scale(1) rotate(var(--r,-8deg))}
+.pop{transform:scale(.2);transform-box:fill-box;transform-origin:center;transition:transform .5s cubic-bezier(.2,1.6,.4,1),opacity .2s}
+.pop.on{transform:scale(1)}
+.rot{transform-box:view-box;transform:rotate(var(--a0));transition:transform .75s cubic-bezier(.3,1.35,.5,1)}
+.rot.on{transform:rotate(var(--a1))}
+
+/* loops: only run on the live stage */
+.lp{animation-play-state:paused!important}
+.live .lp,#parcel .lp,.pstatic .lp{animation-play-state:running!important}
+.art .lp{transform-box:fill-box;transform-origin:center}
+.a-pulse{animation:a-pulse 2.2s ease-in-out infinite}
+.a-blink{animation:a-blink 1.05s steps(2,jump-none) infinite}
+.a-sway{animation:a-sway 3.2s ease-in-out infinite alternate;transform-origin:50% 0!important}
+.a-spin{animation:a-spin 2.6s linear infinite}
+.a-bob{animation:a-bob 2.4s ease-in-out infinite alternate}
+.a-scan{animation:a-scan 2.8s ease-in-out infinite alternate}
+.a-scanx{animation:a-scanx 2.1s ease-in-out infinite alternate}
+.a-bounce{animation:a-bounce 3.4s cubic-bezier(.5,0,.5,1) infinite}
+.a-wiggle{animation:a-wiggle .9s ease-in-out infinite alternate}
+.a-flash{animation:a-flash 1.6s ease-out infinite}
+.a-slide{animation:a-slide 5.5s linear infinite}
+.a-fall{animation:a-fall 1.9s ease-in infinite}
+.a-roll{animation:a-roll 4.2s linear infinite}
+.a-tick{animation:a-spin 6s linear infinite}
+.a-glow{animation:a-glow 1.6s ease-in-out infinite alternate}
+@keyframes a-pulse{50%{transform:scale(1.13)}}
+@keyframes a-blink{50%{opacity:0}}
+@keyframes a-sway{from{transform:rotate(-5deg)}to{transform:rotate(5deg)}}
+@keyframes a-spin{to{transform:rotate(360deg)}}
+@keyframes a-bob{to{transform:translateY(-6px)}}
+@keyframes a-scan{from{transform:translateX(-20px)}to{transform:translateX(20px)}}
+@keyframes a-scanx{from{transform:translateX(0)}to{transform:translateX(168px)}}
+@keyframes a-bounce{0%,100%{transform:translateX(0)}45%{transform:translateX(-96px)}55%{transform:translateX(-84px)}}
+@keyframes a-wiggle{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
+@keyframes a-flash{0%{opacity:0;transform:scale(.6)}20%{opacity:1}100%{opacity:0;transform:scale(1.25)}}
+@keyframes a-slide{0%{transform:translateX(0);opacity:0}10%,85%{opacity:1}100%{transform:translateX(160px);opacity:0}}
+@keyframes a-fall{0%{transform:translateY(-10px);opacity:0}25%{opacity:1}100%{transform:translateY(60px) scale(.6);opacity:0}}
+@keyframes a-roll{0%{transform:translateX(0);opacity:0}10%,85%{opacity:.9}100%{transform:translateX(540px);opacity:0}}
+@keyframes a-glow{from{opacity:.55}to{opacity:1}}
+
+/* ambient doodles */
+.dd{position:absolute;z-index:1;width:24px;height:24px;color:var(--ghost);pointer-events:none;animation:a-drift 11s ease-in-out infinite alternate}
+@keyframes a-drift{to{transform:translate(7px,-9px) rotate(12deg)}}
+
+/* protagonist */
+#parcel{position:fixed;left:0;top:0;z-index:4;width:var(--pw);pointer-events:none;opacity:0;transition:opacity .2s;transform-origin:50% 50%;will-change:transform}
+#parcel svg,.pstatic svg{display:block;width:100%;height:auto;overflow:visible}
+.pstatic{position:absolute;z-index:4;width:var(--pw);pointer-events:none}
+.pbox,.pspark{transition:opacity .25s,transform .35s cubic-bezier(.2,1.5,.4,1);transform-box:fill-box;transform-origin:center}
+.pst{opacity:0;transform:scale(2.2);transform-box:fill-box;transform-origin:center;transition:opacity .12s,transform .3s cubic-bezier(.2,1.5,.4,1)}
+.pst.got{opacity:1;transform:scale(1)}
+
+/* nav */
+.rail{position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:6;display:flex;flex-direction:column;gap:8px;padding:8px 4px}
+.rail button{position:relative;width:11px;height:11px;padding:0;border-radius:50%;border:2px solid var(--ink-2);background:var(--board);cursor:pointer;transition:transform .2s,background .2s,border-color .2s}
+.rail button[aria-current="step"]{background:var(--blue);border-color:var(--blue);transform:scale(1.35)}
+.rail button span{position:absolute;right:22px;top:50%;transform:translateY(-50%);white-space:nowrap;font-family:var(--hand);font-weight:700;font-size:.92rem;color:var(--ink);background:var(--card);padding:.1rem .5rem;border-radius:3px;box-shadow:0 2px 8px rgba(27,30,35,.12);opacity:0;pointer-events:none;transition:opacity .15s}
+.rail button:hover span,.rail button:focus-visible span{opacity:1}
+.count{position:fixed;right:18px;bottom:16px;z-index:6;display:flex;align-items:center;gap:.4rem;font-family:var(--hand);font-weight:700;font-size:1rem;color:var(--ink-2)}
+.count button{width:32px;height:32px;border-radius:50%;border:2px solid var(--ink-2);background:var(--board);color:var(--ink);font-family:var(--hand);font-weight:700;font-size:1rem;cursor:pointer;line-height:1}
+.count button:hover{border-color:var(--blue);color:var(--blue)}
+.count output{min-width:4.2em;text-align:center;font-variant-numeric:tabular-nums}
+
+/* theme toggle */
+.theme{position:fixed;top:14px;right:14px;z-index:7;display:inline-flex;align-items:center;gap:.45rem;height:38px;padding:0 .85rem 0 .65rem;border:2px solid var(--ink-2);border-radius:999px;background:var(--board);color:var(--ink);font-family:var(--hand);font-weight:700;font-size:.98rem;line-height:1;cursor:pointer;transition:border-color .2s,color .2s}
+.theme:hover{border-color:var(--blue);color:var(--blue)}
+.theme svg{width:20px;height:20px;flex:0 0 auto;overflow:visible}
+.theme .i-sun{display:none}
+:root[data-mode="dark"] .theme .i-sun{display:block}
+:root[data-mode="dark"] .theme .i-moon{display:none}
+.theme .tl{padding-top:.1rem}
+
+/* detail-level toggle */
+.lvl{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:7;display:inline-flex;align-items:center;gap:.18rem;height:38px;padding:0 .3rem;border:2px solid var(--ink-2);border-radius:999px;background:var(--board);transition:opacity .3s ease}
+:root.sc .lvl{opacity:.4}
+:root.sc .lvl:hover,:root.sc .lvl:focus-within{opacity:1}
+.lvl .lvt{font-family:var(--mono);font-size:.64rem;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-2);padding:.12rem .38rem 0 .5rem;opacity:.75}
+.lvl button{font-family:var(--hand);font-weight:700;font-size:.95rem;line-height:1;white-space:nowrap;color:var(--ink-2);background:none;border:0;border-radius:999px;padding:.44rem .7rem .32rem;cursor:pointer;transition:background .2s,color .2s}
+.lvl button:hover{color:var(--blue)}
+.lvl button[aria-pressed="true"]{background:var(--ink);color:var(--board)}
+:root[data-lv="plain"] .dtl{display:none!important}
+:root:not([data-lv="plain"]) .pln{display:none!important}
+
+/* how-it-works card */
+dialog.card{border:0;padding:0;background:transparent;width:min(580px,92vw);max-height:88vh;overflow:visible}
+dialog.card::backdrop{background:var(--scrim);backdrop-filter:blur(2px)}
+.card-in{position:relative;background:var(--card);padding:2.5rem 2.3rem 2.1rem;max-height:86vh;overflow:auto;transform:rotate(-.7deg);box-shadow:0 22px 44px -14px rgba(27,30,35,.4),0 2px 6px rgba(27,30,35,.12);border-top:3px solid var(--red)}
+dialog[open] .card-in{animation:cardin .3s cubic-bezier(.2,1.2,.4,1)}
+@keyframes cardin{from{transform:rotate(-3deg) translateY(24px);opacity:0}}
+.tape{position:absolute;top:-16px;left:50%;width:120px;height:30px;transform:translateX(-50%) rotate(-3deg);background:var(--tape);box-shadow:0 1px 2px rgba(27,30,35,.12);z-index:2}
+.card .k{font-family:var(--hand);font-weight:700;font-size:1.05rem;color:var(--blue);margin:0}
+.card h3{font-family:var(--display);font-weight:800;font-size:1.65rem;line-height:1.08;letter-spacing:-.025em;margin:.35rem 0 1rem;text-wrap:balance}
+.card p{margin:0;font-size:1rem;line-height:1.62;color:var(--ink-2)}
+.card p+p{margin-top:.8rem}
+.card code{font-family:var(--mono);font-size:.84em;color:var(--ink)}
+.card .gates{list-style:none;margin:1.3rem 0 0;padding:1rem 0 0;border-top:2px dashed var(--rule);display:flex;flex-direction:column;gap:.55rem}
+.card .gates li{position:relative;padding-left:1.7rem;font-size:.95rem;line-height:1.5;color:var(--ink-2)}
+.card .gates li::before{content:"";position:absolute;left:0;top:.28rem;width:.95rem;height:.95rem;border:2.4px solid var(--red);border-radius:3px;transform:rotate(-6deg)}
+.card .gates b{color:var(--ink);font-weight:600}
+.card .ev{margin-top:1.2rem;padding:.9rem 1rem;background:var(--board);border-left:3px solid var(--ink);font-size:.93rem;line-height:1.55;color:var(--ink-2)}
+.card .ev b{font-family:var(--mono);font-size:.86em;font-weight:500;color:var(--ink)}
+.card .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:1rem}
+.card .chips span{font-family:var(--mono);font-size:.74rem;color:var(--blue);border:1.5px solid color-mix(in srgb,var(--blue) 40%,transparent);border-radius:99px;padding:.15rem .55rem}
+.card .x{position:absolute;top:.7rem;right:.8rem;width:36px;height:36px;border:0;background:none;font-family:var(--hand);font-weight:700;font-size:1.6rem;line-height:1;color:var(--ink-2);cursor:pointer;border-radius:50%}
+.card .x:hover{color:var(--red-t)}
+
+/* outro */
+.outro{position:relative;z-index:1;padding:0 0 12vh}
+.outro-ln{display:block;width:100%;height:230px;overflow:visible}
+.outro-in{width:min(900px,88vw);margin:0 auto}
+.tray{display:block;position:relative;z-index:1;width:100%;height:92px;overflow:visible}
+.outro h2{font-family:var(--display);font-weight:800;font-size:clamp(2.4rem,4.6vw,4.2rem);letter-spacing:-.035em;line-height:1;margin:1rem 0 0;text-wrap:balance}
+.outro .sent{max-width:44ch}
+.rules{list-style:none;margin:3rem 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2.4rem 3rem}
+.rules li{display:grid;grid-template-columns:2.6rem 1fr;gap:1rem;align-items:start}
+.rules .num{width:2.3rem;height:2.3rem;font-family:var(--hand);font-weight:700}
+.rules h3{font-family:var(--display);font-weight:800;font-size:1.22rem;line-height:1.2;letter-spacing:-.015em;margin:.2rem 0 .4rem}
+.rules p{margin:0;font-size:.98rem;line-height:1.58;color:var(--ink-2)}
+footer{position:relative;z-index:1;padding:2.2rem 0 4rem;color:var(--ink-2);font-size:.9rem;line-height:1.65}
+footer div{width:min(900px,88vw);margin:0 auto}
+footer p+p{margin-top:.6rem}
+
+/* reduced motion: every stage composed and static */
+.rm .st{height:auto}
+.rm .pin{position:relative}
+.rm .lp,.rm .dd,.rm .cue{animation:none!important}
+.rm .bt,.rm .stamp,.rm .pop,.rm .pst,.rm .rot{transition:none!important}
+
+/* narrow / portrait */
+@media (max-width:760px),(max-aspect-ratio:4/5){
+  body{font-size:16px}
+  .copy{left:6vw!important;right:auto!important;top:max(6vh,68px)!important;transform:none!important;width:80vw!important}
+  .copy h2{font-size:clamp(2rem,9vw,2.8rem)!important}
+  .copy h1{font-size:clamp(2.8rem,13vw,4rem)}
+  .sent{font-size:1rem;max-width:none}
+  .legend{font-size:.92rem}
+  #s0 .sent{max-width:none}
+  .key{margin-top:1.5rem;max-width:19rem}
+  .key>summary{display:inline-flex;align-items:center;gap:.4rem;width:max-content;padding:.42rem .8rem;border:2px solid var(--ghost);border-radius:999px;background:var(--card);font-family:var(--hand);font-weight:700;font-size:.95rem;color:var(--ink-2);cursor:pointer;list-style:none}
+  .key>summary::-webkit-details-marker{display:none}
+  .key>summary::after{content:"+";font-size:1.05rem;line-height:1}
+  .key[open]>summary{margin-bottom:.7rem}
+  .key[open]>summary::after{content:"\2013"}
+  .key[open]{padding:.9rem 1rem 1rem;border:2px solid var(--ghost);border-radius:14px;background:var(--card);box-shadow:0 6px 22px rgba(27,30,35,.08)}
+  .key[open]>summary{border:0;background:none;padding:0 0 .1rem}
+  .key .legend{margin-top:0}
+  .key .legend{font-size:.88rem;gap:.4rem 1.1rem}
+  .key .stats{margin-top:.7rem;font-size:.68rem}
+  .key .hnote{margin-top:.6rem;max-width:none;font-size:.86rem}
+  .key[open]{padding:.8rem .9rem .85rem}
+  #s0 .cue{margin-top:1.2rem}
+  .fine{display:none}
+  .rail{display:none}
+  .eb{gap:.55rem}
+  .eb code{font-size:.66rem;padding:.24rem .4rem}
+  .theme{width:34px;height:34px;padding:0;justify-content:center;top:7px;right:7px}
+  .theme svg{width:18px;height:18px}
+  .theme .tl{display:none}
+  .lvl{top:7px;height:34px;padding:0 .22rem;gap:.1rem}
+  .lvl .lvt{display:none}
+  .lvl button{font-size:.86rem;padding:.4rem .56rem .28rem}
+  :root{--pw:66px}
+  .rules{grid-template-columns:1fr}
+  .tray{height:72px}
+}
+/* small phones: compress so the column clears the toolbar and the pager */
+@media (max-aspect-ratio:4/5) and (max-height:660px){
+  .copy h1{font-size:clamp(2rem,10.8vw,4rem)}
+  .copy h2{font-size:clamp(1.55rem,7.4vw,2.8rem)!important}
+  .copy h2,.copy h1{margin-top:.65rem}
+  .sent{font-size:.93rem;margin-top:.75rem}
+  .st .sent+.sent{margin-top:.5rem}
+  .eb{font-size:1rem}
+  #s0 .prov{margin-top:.35rem;font-size:.66rem}
+  #s0 .key{margin-top:.85rem}
+  #s0 .cue{display:none}
+  .how{margin-top:.9rem;font-size:1.05rem}
+}
+</style>
+<style>.tk{font-family:var(--mono);font-weight:500;fill:var(--ink)}
+.tbm{font-family:var(--mono);font-weight:500;fill:var(--blue)}</style>
+<script>
+(function(){var r=document.documentElement,s=null;try{s=localStorage.getItem('pathTheme');}catch(e){}
+ if(s==='dark'||s==='light')r.setAttribute('data-theme',s);
+ var d=r.getAttribute('data-theme');r.setAttribute('data-mode',d?d:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+ var v=null;try{v=localStorage.getItem('pathLevel');}catch(e){}
+ r.setAttribute('data-lv',v==='plain'?'plain':'tech');})();
+</script>
+<button class="theme" type="button" id="theme" aria-label="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1Z" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="2.3"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg><span class="tl">Dark</span></button>
+<div class="lvl" role="group" aria-label="How technical the writing is"><span class="lvt" aria-hidden="true">detail</span><button type="button" data-lv="plain">Plain English</button><button type="button" data-lv="tech">Technical</button></div>
+<div class="board-bg" aria-hidden="true"></div>
+<svg class="symdefs" aria-hidden="true"><defs>
+  <symbol id="d-ring" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2.3"/></symbol>
+  <symbol id="d-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></symbol>
+  <symbol id="d-tri" viewBox="0 0 24 24"><path d="M12 4 21 19H3Z" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round"/></symbol>
+  <symbol id="d-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.4" fill="currentColor"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/><circle cx="19" cy="12" r="2.4" fill="currentColor"/></symbol>
+  <symbol id="d-sq" viewBox="0 0 24 24"><path d="M5 6 19 5 18 19 6 18Z" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linejoin="round"/></symbol>
+  <symbol id="d-zig" viewBox="0 0 24 24"><path d="M2 14 7 8l5 6 5-6 5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="human" viewBox="0 0 24 24"><circle cx="12" cy="7.2" r="4.3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4.3 21.2c.5-5.2 4-7.6 7.7-7.6s7.2 2.4 7.7 7.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+</defs></svg>
+
+<main>
+<!-- HERO -->
+<section class="st" id="s0" data-lay="L" data-name="Start" style="--len:.9">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="An uncapped blue whiteboard marker, labelled WHITEBOARD MARKER, with its cap lying beside it, starting to draw the line.">
+   <g transform="translate(560,330) rotate(-135)">
+    <polygon class="r" points="0,0 42,-17 42,17" data-fill="blue" data-fs="solid" data-sw="4"/>
+    <rect class="r" x="42" y="-25" width="30" height="50" data-fill="white" data-fs="solid" data-sw="4.5"/>
+    <rect class="r" x="72" y="-37" width="250" height="74" data-fill="white" data-fs="solid" data-sw="5.5"/>
+    <rect class="r" x="80" y="-37" width="70" height="74" data-fill="blue" data-fs="hachure" data-gap="10" data-stroke="none"/>
+    <rect class="r" x="160" y="-31" width="152" height="62" data-fill="white" data-fs="solid" data-stroke="blue" data-sw="3.5"/>
+    <g transform="translate(236,0) rotate(180)">
+     <text class="tk" x="0" y="-3" font-size="20" font-weight="700" text-anchor="middle">WHITEBOARD</text>
+     <text class="tk" x="3" y="17" font-size="13" font-weight="700" letter-spacing="6" text-anchor="middle">MARKER</text>
+    </g>
+    <rect class="r" x="322" y="-33" width="36" height="66" data-fill="blue" data-fs="solid" data-sw="4.5"/>
+   </g>
+   <g transform="translate(800,190) rotate(-18)">
+    <rect class="r" x="-62" y="-35" width="124" height="70" data-fill="blue" data-fs="solid" data-sw="5"/>
+    <rect class="r" x="-62" y="-35" width="18" height="70" data-fill="white" data-fs="solid" data-sw="4"/>
+    <path class="r" d="M-18 -35 L-18 -54 L72 -54 L72 -35" data-sw="4.5"/>
+   </g>
+   <circle cx="560" cy="330" r="10" fill="#2455F0"/>
+   <text class="tb" x="745" y="470" font-size="31" transform="rotate(-6 745 470)">follow the line</text>
+   <path class="r" d="M742 482 C 712 500, 700 516, 676 526" data-stroke="blue" data-sw="3.5"/>
+   <path class="r" d="M688 512 L674 527 L694 532" data-stroke="blue" data-sw="3.5"/>
+  </svg>
+  <div class="copy">
+   <p class="eb" data-s="A guided tour of how my software gets built">Guided tour of my orchestration pipeline</p>
+   <h1>From <span class="pi">Post<span class="hy">&#8209;</span>It</span> to Prod</h1>
+   <p class="sent" data-s="I built an assembly line for software. You hand it an idea; AI agents carry it through every step and hand back finished, tested work. People still make all the real decisions.">In January I gave a fully codified agentic delivery pipeline a crack. Now it's a machine that turns any idea into shippable software. Agents handle every step, humans still make the decisions.</p>
+   <p class="sent" data-s="Scroll down to see the whole path.">Scroll down to whiteboard the entire path.</p>
+   <p class="prov" data-s="Everything here is real and running. Nothing is made up.">Built from the actual code and .md files in my repo, no hypotheticals.</p>
+   <details class="key" open><summary>Key</summary>
+   <div class="legend">
+    <span><svg viewBox="0 0 34 12" aria-hidden="true"><path d="M2 7C10 2 20 11 32 5" stroke="#2455F0" stroke-width="6" fill="none" stroke-linecap="round"/></svg>the path</span>
+    <span><svg viewBox="0 0 34 14" aria-hidden="true"><rect x="1.2" y="3.5" width="31" height="7.5" fill="none" stroke="#E03A2F" stroke-width="2.4"/><rect x="5" y="3.5" width="6" height="7.5" fill="#E03A2F"/><rect x="21" y="3.5" width="6" height="7.5" fill="#E03A2F"/></svg><span data-s="a safety check">a quality gate</span></span>
+    <span><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span data-s="I run it">I run it</span></span>
+    <span><span class="auto" aria-hidden="true">&#8627;</span><span data-s="runs itself">fires itself</span></span>
+    <span><svg viewBox="0 0 34 12" aria-hidden="true"><path d="M2 7C10 2 20 11 32 5" stroke="#1F9D5A" stroke-width="4" fill="none" stroke-linecap="round"/></svg><span data-s="passed">cleared</span></span>
+   </div>
+   <p class="stats" data-s="5 STAGES &amp;middot; 8 STEPS &amp;middot; 21 CHECKS &amp;middot; A PERSON DECIDES">5 PHASES &middot; 8 STEPS &middot; 21 GATES &middot; HUMAN IN THE LOOP</p>
+   <p class="hnote"><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span data-s="I type two things: one to write the idea down, one to start the work. Everything after that runs on its own. The only button left for me is the one that puts it live.">Four commands, start to finish: <b>/idea</b> or <b>/new-ticket</b> to capture, then <b>/ticket-build</b> (or <b>/wave-planner</b>) to start the work. The rest fires on its own; only the LAUNCH button still needs me.</span></p>
+   </details>
+   <p class="cue" aria-hidden="true">&darr;</p>
+  </div>
+ </div>
+</section>
+
+<!-- MAP: the route -->
+<section class="st" id="smap" data-lay="T" data-name="The route" style="--len:1.5">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 460" role="img" aria-label="Five boxes sitting on the line, left to right. Idea holds Capture. Spec holds Specify, Decompose, Prove and Attack. Build holds Route, Review, Commit gate and Open PR. Verify holds CI and Four corners. Ship holds Release, Codify and Shipped.">
+   <g data-at=".30">
+    <rect class="r" x="60" y="124" width="146" height="296" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="tm" x="71" y="152" font-size="12.5">01</text><text class="tbm" x="195" y="152" font-size="11.5" text-anchor="end">/idea</text>
+    <text class="stt" x="71" y="190" font-size="24" fill="#1B1E23">Idea</text>
+    <line class="r fine" x1="71" y1="204" x2="195" y2="204" data-sw="2.5"/>
+    <text class="t" x="71" y="234" font-size="17">Capture</text>
+    <text class="t2 fine" x="71" y="251" font-size="12.5">one sentence</text>
+    <line class="r" x1="133" y1="420" x2="133" y2="442" data-sw="3"/>
+   </g>
+   <g data-at=".43">
+    <path class="r" d="M213 262 L226 272 L213 282" data-stroke="blue" data-sw="3.5"/>
+    <rect class="r" x="231" y="124" width="146" height="296" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="tm" x="242" y="152" font-size="12.5">02&#8211;03</text><text class="tbm" x="366" y="152" font-size="11.5" text-anchor="end">/new-ticket</text>
+    <text class="stt" x="242" y="190" font-size="24" fill="#1B1E23">Spec</text>
+    <line class="r fine" x1="242" y1="204" x2="366" y2="204" data-sw="2.5"/>
+    <text class="t" x="242" y="234" font-size="17">Specify</text>
+    <text class="t2 fine" x="242" y="251" font-size="12.5">brief + size</text>
+    <text class="t" x="242" y="278" font-size="17">Decompose</text>
+    <text class="t2 fine" x="242" y="295" font-size="12.5">split epics</text>
+    <text class="t" x="242" y="322" font-size="17">Prove</text>
+    <text class="t2 fine" x="242" y="339" font-size="12.5">the test plan</text>
+    <text class="t" x="242" y="366" font-size="17">Attack</text>
+    <text class="dtl t2 fine" x="242" y="383" font-size="12.5">red-team</text><text class="pln t2 fine" x="242" y="383" font-size="12.5">the challenge</text>
+    <line class="r" x1="304" y1="420" x2="304" y2="442" data-sw="3"/>
+   </g>
+   <g data-at=".56">
+    <path class="r" d="M384 262 L397 272 L384 282" data-stroke="blue" data-sw="3.5"/>
+    <rect class="r" x="402" y="124" width="146" height="296" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="tm" x="413" y="152" font-size="12.5">04</text><text class="tbm" x="537" y="152" font-size="11.5" text-anchor="end">/ticket-build</text>
+    <text class="stt" x="413" y="190" font-size="24" fill="#1B1E23">Build</text>
+    <line class="r fine" x1="413" y1="204" x2="537" y2="204" data-sw="2.5"/>
+    <text class="t" x="413" y="234" font-size="17">Route</text>
+    <text class="t2 fine" x="413" y="251" font-size="12.5">to the owner</text>
+    <text class="t" x="413" y="278" font-size="17">Review</text>
+    <text class="dtl t2 fine" x="413" y="295" font-size="12.5">sec &middot; arch &middot; QA</text><text class="pln t2 fine" x="413" y="295" font-size="12.5">3 reviews</text>
+    <text class="t" x="413" y="322" font-size="17">Commit gate</text>
+    <text class="t2 fine" x="413" y="339" font-size="12.5">12 checks</text>
+    <text class="t" x="413" y="366" font-size="17">Open PR</text>
+    <text class="t2 fine" x="413" y="383" font-size="12.5">if eligible</text>
+    <line class="r" x1="475" y1="420" x2="475" y2="442" data-sw="3"/>
+   </g>
+   <g data-at=".69">
+    <path class="r" d="M555 262 L568 272 L555 282" data-stroke="blue" data-sw="3.5"/>
+    <rect class="r" x="573" y="124" width="146" height="296" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="tm" x="584" y="152" font-size="12.5">05</text>
+    <text class="stt" x="584" y="190" font-size="24" fill="#1B1E23">Verify</text>
+    <line class="r fine" x1="584" y1="204" x2="708" y2="204" data-sw="2.5"/>
+    <text class="t" x="584" y="234" font-size="17">CI</text>
+    <text class="dtl t2 fine" x="584" y="251" font-size="12.5">scoped suites</text><text class="pln t2 fine" x="584" y="251" font-size="12.5">only what changed</text>
+    <text class="t" x="584" y="278" font-size="17">Four corners</text>
+    <text class="dtl t2 fine" x="584" y="295" font-size="12.5">browser QA</text><text class="pln t2 fine" x="584" y="295" font-size="12.5">in a real browser</text>
+    <line class="r" x1="646" y1="420" x2="646" y2="442" data-sw="3"/>
+   </g>
+   <g data-at=".82">
+    <path class="r" d="M726 262 L739 272 L726 282" data-stroke="blue" data-sw="3.5"/>
+    <rect class="r" x="744" y="124" width="146" height="296" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="tm" x="755" y="152" font-size="12.5">06&#8211;08</text>
+    <text class="stt" x="755" y="190" font-size="24" fill="#1B1E23">Ship</text>
+    <line class="r fine" x1="755" y1="204" x2="879" y2="204" data-sw="2.5"/>
+    <text class="t" x="755" y="234" font-size="17">Release</text>
+    <text class="t2 fine" x="755" y="251" font-size="12.5">human-gated</text>
+    <text class="t" x="755" y="278" font-size="17">Codify</text>
+    <text class="t2 fine" x="755" y="295" font-size="12.5">lessons &rarr; rules</text>
+    <text class="t" x="755" y="322" font-size="17">Shipped</text>
+    <line class="r" x1="817" y1="420" x2="817" y2="442" data-sw="3"/>
+   </g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">&rarr;</span><span>The whole route</span></p>
+   <h2 data-s="Idea &amp;rarr; Plan &amp;rarr; Build &amp;rarr; Verify &amp;rarr; Ship<span class=&quot;subh&quot;>Five stages, eight steps, one path through all of them.</span>">Idea &rarr; Spec &rarr; Build &rarr; Verify &rarr; Ship<span class="subh">Five phases, eight steps, one line through all of them.</span></h2>
+   <p class="sent" data-s="Every change follows this same path. Its size and risk decide which checks and which specialist agents get involved, so small work stays cheap.">Every change takes this same route; its size and risk profile inform what quality gates and specialist agents get involved (optimising cost for smaller work).</p>
+   <p class="sent" data-s="The blue commands are the only ones I type. Capture the idea, then start the build. Every stage after that runs on its own.">The blue commands are the only ones I ever type. Capture, then kick off the build. Every stage after that fires on its own.</p>
+  </div>
+ </div>
+</section>
+
+<!-- 01 IDEA -->
+<section class="st" id="s1" data-num="01" data-lay="L" data-name="Idea" style="--len:1.7">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A one-line idea is typed into a terminal; the idea lights up and leaves it, is checked against the backlog for duplicates, and lands as a placeholder.">
+   <rect class="r" x="140" y="140" width="440" height="220" data-fill="white" data-fs="solid" data-sw="5"/>
+   <line class="r" x1="140" y1="182" x2="580" y2="182" data-sw="3.5"/>
+   <circle class="r" cx="166" cy="161" r="6" data-sw="3"/><circle class="r" cx="190" cy="161" r="6" data-sw="3"/><circle class="r" cx="214" cy="161" r="6" data-sw="3"/>
+   <g data-at=".1"><text class="tk" x="172" y="238" font-size="27">&gt; /idea</text></g>
+   <g data-at=".18"><text class="t" x="172" y="286" font-size="27">bulk-archive old orders</text></g>
+   <g data-at=".18"><rect class="lp a-blink" x="172" y="306" width="14" height="28" fill="#1B1E23"/></g>
+   <g class="pop" data-at=".3">
+    <line class="r" x1="660" y1="222" x2="660" y2="200" data-stroke="blue" data-sw="5"/><line class="r" x1="660" y1="288" x2="660" y2="310" data-stroke="blue" data-sw="5"/>
+    <line class="r" x1="627" y1="255" x2="605" y2="255" data-stroke="blue" data-sw="5"/><line class="r" x1="693" y1="255" x2="715" y2="255" data-stroke="blue" data-sw="5"/>
+    <line class="r" x1="637" y1="232" x2="621" y2="216" data-stroke="blue" data-sw="5"/><line class="r" x1="683" y1="278" x2="699" y2="294" data-stroke="blue" data-sw="5"/>
+    <line class="r" x1="683" y1="232" x2="699" y2="216" data-stroke="blue" data-sw="5"/><line class="r" x1="637" y1="278" x2="621" y2="294" data-stroke="blue" data-sw="5"/>
+   </g>
+   <text class="t" x="830" y="418" font-size="27" text-anchor="middle">backlog</text>
+   <rect class="r" x="700" y="430" width="260" height="170" data-fill="white" data-fs="solid" data-sw="5"/>
+   <rect class="r" x="716" y="452" width="56" height="46" data-sw="3"/><line class="r fine" x1="726" y1="468" x2="760" y2="468" data-sw="2.5"/><line class="r fine" x1="726" y1="482" x2="752" y2="482" data-sw="2.5"/>
+   <rect class="r" x="888" y="452" width="56" height="46" data-sw="3"/><line class="r fine" x1="898" y1="468" x2="932" y2="468" data-sw="2.5"/><line class="r fine" x1="898" y1="482" x2="924" y2="482" data-sw="2.5"/>
+   <rect class="r" x="716" y="536" width="56" height="46" data-sw="3"/><line class="r fine" x1="726" y1="552" x2="760" y2="552" data-sw="2.5"/>
+   <rect class="r" x="888" y="536" width="56" height="46" data-sw="3"/><line class="r fine" x1="898" y1="552" x2="932" y2="552" data-sw="2.5"/>
+   <g data-at=".44"><text class="t" x="610" y="462" font-size="23" text-anchor="middle">already tracked?</text>
+    <circle class="r" cx="610" cy="520" r="36" data-sw="5"/><line class="r" x1="636" y1="546" x2="668" y2="580" data-sw="9"/></g>
+   <g data-at=".56"><text class="tg" x="548" y="628" font-size="27">no</text><path class="r" d="M588 612 l10 12 l22 -26" data-stroke="green" data-sw="5.5"/></g>
+   <g data-at=".66"><text class="tg" x="875" y="288" font-size="21" text-anchor="middle">placeholder priority</text><text class="tg" x="875" y="314" font-size="21" text-anchor="middle">+ milestone</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">01</span><span>Capture</span><code><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span class="vh">run by a person: </span>/idea</code></p>
+   <h2 data-s="Capture an idea the moment you have it<span class=&quot;subh&quot;>No napkin required.</span>">Add new ideas from anywhere<span class="subh">No napkin required.</span></h2>
+   <p class="sent" data-s="One line is enough. It writes a proper title, checks the backlog for a duplicate, and files it for later.">A single command makes adding a new idea or task into the backlog fast and frictionless &mdash; a title or short sentence is all we need, and we even check for duplicates before adding.</p>
+   <button class="how" type="button" data-card="c1">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 02 BLUEPRINT -->
+<section class="st" id="s2" data-num="02a" data-lay="R" data-name="Blueprint" style="--len:1.7">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A speech bubble of intake questions with a person answering beside it; then three open boxes sized S, M and L on a shelf, and the idea drops into the large one, which closes and is stamped with its size and type.">
+   <g data-off=".42">
+    <rect class="r" x="110" y="92" width="410" height="152" data-fill="white" data-fs="solid" data-sw="4.5"/>
+    <path class="r" d="M166 244 l-28 38 l70 -38" data-fill="white" data-fs="solid" data-sw="4.5"/>
+    <text class="t2" x="136" y="126" font-size="17">3&#8211;7 targeted questions</text>
+    <text class="t" x="136" y="164" font-size="22">what job is this doing?</text>
+    <text class="t2" x="136" y="196" font-size="19">who is it for? what&#8217;s in scope?</text>
+    <text class="t2" x="136" y="224" font-size="19">what does done look like?</text>
+    <use href="#human" x="124" y="284" width="34" height="34" style="color:var(--red-t)"/>
+    <text class="tr" x="172" y="300" font-size="20">a person answers, then</text>
+    <text class="tr" x="172" y="324" font-size="20">confirms the brief</text>
+   </g>
+   <line class="r" x1="70" y1="470" x2="930" y2="470" data-sw="6"/>
+   <line class="r" x1="130" y1="470" x2="150" y2="505" data-sw="4"/><line class="r" x1="870" y1="470" x2="850" y2="505" data-sw="4"/>
+   <rect class="r" x="130" y="400" width="80" height="70" data-fill="white" data-fs="solid" data-sw="4.5"/>
+   <line class="r" x1="130" y1="400" x2="112" y2="376" data-sw="4"/><line class="r" x1="210" y1="400" x2="228" y2="376" data-sw="4"/>
+   <rect class="r" x="280" y="370" width="120" height="100" data-fill="white" data-fs="solid" data-sw="4.5"/>
+   <line class="r" x1="280" y1="370" x2="254" y2="338" data-sw="4"/><line class="r" x1="400" y1="370" x2="426" y2="338" data-sw="4"/>
+   <g data-off=".47">
+    <rect class="r" x="500" y="320" width="200" height="150" data-fill="white" data-fs="solid" data-sw="5"/>
+    <line class="r" x1="500" y1="320" x2="464" y2="278" data-sw="4.5"/><line class="r" x1="700" y1="320" x2="736" y2="278" data-sw="4.5"/>
+   </g>
+   <text class="t" x="170" y="540" font-size="34" text-anchor="middle">S</text>
+   <text class="t" x="340" y="540" font-size="34" text-anchor="middle">M</text>
+   <text class="t" x="600" y="540" font-size="34" text-anchor="middle">L</text>
+   <g class="stamp" data-at=".12" style="--r:6deg"><rect class="r" x="740" y="196" width="170" height="54" data-sw="4.5"/><text class="stt" x="825" y="232" font-size="26" text-anchor="middle" fill="#1B1E23">feature</text></g>
+   <g class="stamp" data-at=".55" style="--r:-9deg"><rect class="r" x="740" y="320" width="176" height="66" data-sw="5.5"/><text class="stt" x="828" y="365" font-size="34" text-anchor="middle" fill="#1B1E23">size L</text></g>
+   <g data-at=".62">
+    <rect class="r" x="700" y="530" width="250" height="118" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="t" x="720" y="566" font-size="22">acceptance criteria</text>
+    <text class="t2" x="720" y="598" font-size="20">each one checkable</text>
+    <text class="t2" x="720" y="626" font-size="20">at merge time</text>
+    <path class="r" d="M896 596 l10 12 l24 -28" data-stroke="green" data-sw="5.5"/>
+   </g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">02a</span><span>Specify</span><code><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span class="vh">run by a person: </span>/new-ticket</code></p>
+   <h2 data-s="It interviews you before writing anything<span class=&quot;subh&quot;>Pop quiz, hotshot.</span>">Agent interviews you to build the brief<span class="subh">Pop quiz, hotshot.</span></h2>
+   <p class="sent" data-s="An AI agent asks three to seven pointed questions: what job this does, who it is for, where the scope stops, what done looks like. Then it reads the brief back to confirm it got it right.">An agent reads a supplied idea or prompt, then interviews the human to ask clarifying questions, flag risks &amp; constraints, and validate that it got the brief.</p>
+   <p class="sent" data-s="It also assigns a work type and a size, extra-small through extra-large. The size decides which route the ticket takes through the rest of the pipeline.">Agent gives the ticket a work type and T-shirt sizing (XS&ndash;XL) &mdash; every size has a tailored route through the pipeline.</p>
+   <button class="how" type="button" data-card="c2">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 03 SPLIT -->
+<section class="st" id="s3" data-num="02b" data-lay="L" data-name="The split" style="--len:1.9">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A barrier checks the parent epic exists, then the epic crate splits into three child parcels on separate branches, with a dependency string tying two of them.">
+   <rect class="r" x="466" y="112" width="18" height="92" data-fill="ink" data-fs="solid" data-sw="3"/>
+   <circle class="r" cx="475" cy="122" r="10" data-fill="ink" data-fs="solid" data-sw="2.5"/>
+   <g class="rot keep" data-at=".25" style="--a0:0deg;--a1:-74deg;transform-origin:475px 122px">
+    <rect class="r" x="336" y="113" width="140" height="19" data-fill="white" data-fs="solid" data-sw="3.5"/>
+    <rect class="r" x="346" y="113" width="24" height="19" data-fill="red" data-fs="solid" data-stroke="none"/>
+    <rect class="r" x="394" y="113" width="24" height="19" data-fill="red" data-fs="solid" data-stroke="none"/>
+    <rect class="r" x="442" y="113" width="24" height="19" data-fill="red" data-fs="solid" data-stroke="none"/>
+   </g>
+   <g data-at=".04"><text class="tr" x="500" y="95" font-size="23">parent exists?</text></g>
+   <g data-at=".25"><path class="r" d="M660 80 l10 12 l24 -28" data-stroke="green" data-sw="5.5"/></g>
+   <rect class="r" x="520" y="225" width="160" height="110" data-fill="white" data-fs="solid" data-sw="5"/>
+   <line class="r fine" x1="520" y1="262" x2="680" y2="262" data-sw="2.5"/><line class="r fine" x1="520" y1="298" x2="680" y2="298" data-sw="2.5"/>
+   <text class="stt" x="600" y="292" font-size="34" text-anchor="middle" fill="#1B1E23">epic</text>
+   <g data-at=".55">
+    <path class="r" d="M592 336 C 560 390, 430 410, 362 470" data-stroke="blue" data-sw="7"/>
+    <path class="r" d="M608 336 C 640 390, 770 410, 838 470" data-stroke="blue" data-sw="7"/>
+   </g>
+   <g class="pop" data-at=".6"><rect class="r" x="315" y="470" width="92" height="72" data-fill="white" data-fs="solid" data-sw="4.5"/><text class="t" x="361" y="572" font-size="23" text-anchor="middle">admin</text></g>
+   <g class="pop" data-at=".6"><rect class="r" x="793" y="470" width="92" height="72" data-fill="white" data-fs="solid" data-sw="4.5"/><text class="t" x="839" y="572" font-size="23" text-anchor="middle">web</text></g>
+   <g data-at=".62"><text class="tb" x="690" y="470" font-size="25">api</text></g>
+   <g data-at=".66">
+    <g class="lp a-sway"><path class="r" d="M668 500 C 710 540, 760 540, 793 510" data-stroke="red" data-sw="3.5" data-rough="1.5"/></g>
+    <text class="tr" x="735" y="578" font-size="20" text-anchor="middle">blocked by</text>
+   </g>
+   <g class="stamp" data-at=".7" style="--r:-7deg"><rect class="r" x="320" y="605" width="190" height="56" data-sw="4.5"/><text class="stt" x="415" y="642" font-size="26" text-anchor="middle" fill="#1B1E23">child 1 / 3</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">02b</span><span data-s="Decompose">Decompose</span><code><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span class="vh">run by a person: </span>/new-ticket</code></p>
+   <h2 data-s="Bigger work gets split into smaller tickets<span class=&quot;subh&quot;>Break it down now.</span>">Larger work gets split into child tickets<span class="subh">Break it down now.</span></h2>
+   <p class="sent" data-s="The smallest tickets skip this step entirely.">XS and S tickets skip this step.</p>
+   <p class="sent" data-s="Anything larger is sliced into focused tickets, each small enough to finish and verify on its own.">M tickets get split into 2 or 3 tickets if the work calls for it &mdash; linked issues, no parent.</p>
+   <p class="sent" data-s="Dependencies between those tickets are mapped out now, not discovered halfway through the build.">L and XL tickets get carefully sliced into discrete, focused child tickets that comprise it &mdash; and dependencies and links get mapped now, not inferred later.</p>
+   <button class="how" type="button" data-card="c3">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 04 PROOF -->
+<section class="st" id="s4" data-num="03a" data-lay="R" data-name="Proof" style="--len:1.7">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A ticket showing acceptance criteria as plain bullets, and below them the test plan as a checklist: three items automated and one left for a person, beside the five kinds of check that may be handed to a human.">
+   <rect class="r" x="150" y="80" width="410" height="574" data-fill="white" data-fs="solid" data-sw="5"/>
+   <text class="tk" x="172" y="120" font-size="19">#2041</text>
+   <text class="t" x="172" y="152" font-size="25">bulk-archive old orders</text>
+   <rect class="r" x="172" y="168" width="152" height="34" data-stroke="blue" data-sw="3"/>
+   <text class="tb" x="248" y="191" font-size="19" text-anchor="middle">in progress</text>
+   <text class="tm" x="340" y="191" font-size="16">by @qa-eng</text>
+   <line class="r" x1="150" y1="220" x2="560" y2="220" data-sw="3"/>
+   <text class="t2" x="172" y="252" font-size="19">acceptance criteria</text>
+   <text class="t2 fine" x="544" y="252" font-size="16" text-anchor="end">the specification</text>
+   <g data-at=".08"><circle cx="180" cy="278" r="4" fill="#1B1E23"/><text class="t" x="198" y="285" font-size="20">staff can archive in bulk</text></g>
+   <g data-at=".1"><circle cx="180" cy="308" r="4" fill="#1B1E23"/><text class="t" x="198" y="315" font-size="20">archived orders leave the list</text></g>
+   <g data-at=".12"><circle cx="180" cy="338" r="4" fill="#1B1E23"/><text class="t" x="198" y="345" font-size="20">the action is keyboard reachable</text></g>
+   <line class="r" x1="150" y1="366" x2="560" y2="366" data-sw="3"/>
+   <text class="t2" x="172" y="398" font-size="19">test plan</text>
+   <text class="t2 fine" x="290" y="398" font-size="16">the checklist</text>
+   <g data-at=".18"><rect class="r" x="176" y="414" width="26" height="26" data-sw="3.5"/><text class="dtl t" x="214" y="436" font-size="20">409 on overlap</text><text class="pln t" x="214" y="436" font-size="20">double booking blocked</text><text class="tb" x="544" y="436" font-size="17" text-anchor="end">auto</text></g>
+   <g data-at=".24"><rect class="r" x="176" y="464" width="26" height="26" data-sw="3.5"/><text class="t" x="214" y="486" font-size="20">archived hidden from list</text><text class="tb" x="544" y="486" font-size="17" text-anchor="end">auto</text></g>
+   <g data-at=".3"><rect class="r" x="176" y="514" width="26" height="26" data-sw="3.5"/><text class="t" x="214" y="536" font-size="20">reachable by keyboard</text><text class="tb" x="544" y="536" font-size="17" text-anchor="end">auto</text></g>
+   <g data-at=".34"><rect class="r" x="176" y="564" width="26" height="26" data-stroke="red" data-sw="3.5"/><text class="t" x="214" y="586" font-size="20">empty state looks right</text><text class="tr" x="544" y="586" font-size="17" text-anchor="end">MANUAL</text></g>
+   <g data-at=".62"><use href="#human" x="172" y="606" width="26" height="26" style="color:var(--red-t)"/><text class="t2" x="208" y="622" font-size="17">ticked automatically as each one runs;</text><text class="t2" x="208" y="644" font-size="17">the manual one waits for a person</text></g>
+   <g data-at=".38"><text class="tr" x="632" y="252" font-size="23">only these may be</text><text class="tr" x="632" y="280" font-size="23">left to a human:</text></g>
+   <g data-at=".42"><ellipse class="r" cx="652" cy="324" rx="20" ry="12" data-sw="3.5"/><circle cx="652" cy="324" r="5" fill="#1B1E23"/><text class="t" x="690" y="332" font-size="22">looks right</text></g>
+   <g data-at=".45"><rect class="r" x="640" y="370" width="24" height="22" data-sw="3.5"/><line class="r" x1="646" y1="370" x2="646" y2="358" data-sw="3"/><line class="r" x1="658" y1="370" x2="658" y2="358" data-sw="3"/><text class="t" x="690" y="387" font-size="22">real third party</text></g>
+   <g data-at=".48"><rect class="r" x="642" y="418" width="20" height="36" data-sw="3.5"/><text class="t" x="690" y="442" font-size="22">physical device</text></g>
+   <g data-at=".51"><rect class="r" x="634" y="478" width="24" height="18" data-sw="3"/><rect class="r" x="648" y="488" width="24" height="18" data-fill="white" data-fs="solid" data-sw="3"/><text class="t" x="690" y="497" font-size="22">cross-browser</text></g>
+   <g data-at=".54"><line class="r" x1="640" y1="536" x2="664" y2="560" data-stroke="red" data-sw="4"/><line class="r" x1="664" y1="536" x2="640" y2="560" data-stroke="red" data-sw="4"/><text class="t" x="690" y="554" font-size="22">no tooling exists</text></g>
+   <g class="stamp" data-at=".56" style="--r:-6deg"><rect class="r" x="618" y="600" width="210" height="56" data-sw="4.5"/><text class="stt" x="723" y="637" font-size="26" text-anchor="middle" fill="#1B1E23">plan written</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">03a</span><span data-s="Test plan">Prove</span><code><span class="auto" aria-hidden="true">&#8627;</span><span class="vh">fires automatically: </span>/test-plan</code></p>
+   <h2 data-s="The tests are written before the code<span class=&quot;subh&quot;>How we will know it actually works.</span>">Complete test plans, built upfront<span class="subh">How we'll know it actually works.</span></h2>
+   <p class="sent" data-s="Every requirement gets at least one test that proves it. The few kinds of check software genuinely cannot make are flagged for a person.">A detailed test plan declares a verifiable check on all acceptance criteria, and flags the types that call for a human review.</p>
+   <button class="how" type="button" data-card="c4">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+<!-- 05 ADVERSARY -->
+<section class="st" id="s5" data-num="03b" data-lay="T" data-name="The adversary" style="--len:2">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 460" role="img" aria-label="A red context barrier divides the author from the adversary. A small plan document crosses through a slot to red-team on its own separated track, gets rejected and carried back on a different track for round one, then crosses again and continues on for round two. The author's reasoning, unlike the plan, always bounces off the barrier.">
+   <line class="r" x1="500" y1="10" x2="500" y2="48" data-stroke="red" data-sw="6"/><line class="r" x1="500" y1="62" x2="500" y2="100" data-stroke="red" data-sw="6"/>
+   <line class="r" x1="500" y1="114" x2="500" y2="152" data-stroke="red" data-sw="6"/><line class="r" x1="500" y1="166" x2="500" y2="204" data-stroke="red" data-sw="6"/>
+   <line class="r" x1="500" y1="296" x2="500" y2="334" data-stroke="red" data-sw="6"/><line class="r" x1="500" y1="348" x2="500" y2="386" data-stroke="red" data-sw="6"/>
+   <line class="r" x1="500" y1="400" x2="500" y2="438" data-stroke="red" data-sw="6"/>
+   <text class="tr" x="488" y="26" font-size="21" text-anchor="end">CONTEXT BARRIER</text>
+   <rect class="r" x="860" y="222" width="60" height="46" data-sw="4.5"/>
+   <line class="r" x1="890" y1="222" x2="890" y2="204" data-sw="4"/>
+   <circle class="r" cx="890" cy="200" r="5" data-fill="ink" data-fs="solid" data-sw="2.5"/>
+   <circle cx="876" cy="244" r="4" fill="#1B1E23"/><circle cx="904" cy="244" r="4" fill="#1B1E23"/>
+   <line class="r" x1="872" y1="259" x2="908" y2="259" data-sw="3"/>
+   <rect class="r" x="855" y="268" width="70" height="62" data-sw="4.5"/>
+   <text class="t" x="890" y="362" font-size="24" text-anchor="middle">@qa-eng</text>
+   <text class="t2" x="890" y="386" font-size="19" text-anchor="middle">author</text>
+   <g data-off=".16">
+    <rect class="r" x="740" y="60" width="70" height="90" data-fill="white" data-fs="solid" data-sw="4"/>
+    <line class="r" x1="752" y1="78" x2="796" y2="78" data-sw="3"/>
+    <line class="r fine" x1="752" y1="96" x2="800" y2="96" data-sw="2"/>
+    <line class="r fine" x1="752" y1="110" x2="800" y2="110" data-sw="2"/>
+    <line class="r fine" x1="752" y1="124" x2="784" y2="124" data-sw="2"/>
+    <rect class="r" x="752" y="134" width="9" height="9" data-sw="2"/><line class="r fine" x1="765" y1="140" x2="800" y2="140" data-sw="2"/>
+    <text class="t2" x="775" y="174" font-size="19" text-anchor="middle">plan</text>
+   </g>
+   <g data-at=".16" data-off=".4">
+    <rect class="r" x="410" y="155" width="68" height="84" data-fill="white" data-fs="solid" data-sw="4"/>
+    <line class="r" x1="422" y1="173" x2="466" y2="173" data-sw="3"/>
+    <line class="r fine" x1="422" y1="189" x2="470" y2="189" data-sw="2"/>
+    <line class="r fine" x1="422" y1="201" x2="470" y2="201" data-sw="2"/>
+    <line class="r fine" x1="422" y1="213" x2="454" y2="213" data-sw="2"/>
+    <rect class="r" x="422" y="221" width="9" height="9" data-sw="2"/><line class="r fine" x1="435" y1="227" x2="470" y2="227" data-sw="2"/>
+    <text class="t2" x="444" y="255" font-size="19" text-anchor="middle">plan</text>
+   </g>
+   <g data-at=".4" data-off=".62">
+    <rect class="r" x="740" y="60" width="70" height="90" data-fill="white" data-fs="solid" data-sw="4"/>
+    <line class="r" x1="752" y1="78" x2="796" y2="78" data-sw="3"/>
+    <line class="r fine" x1="752" y1="96" x2="800" y2="96" data-sw="2"/>
+    <line class="r fine" x1="752" y1="110" x2="800" y2="110" data-sw="2"/>
+    <line class="r fine" x1="752" y1="124" x2="784" y2="124" data-sw="2"/>
+    <rect class="r" x="752" y="134" width="9" height="9" data-sw="2"/><line class="r fine" x1="765" y1="140" x2="800" y2="140" data-sw="2"/>
+    <text class="t2" x="775" y="174" font-size="19" text-anchor="middle">plan</text>
+   </g>
+   <g data-at=".62">
+    <rect class="r" x="410" y="155" width="68" height="84" data-fill="white" data-fs="solid" data-sw="4"/>
+    <line class="r" x1="422" y1="173" x2="466" y2="173" data-sw="3"/>
+    <line class="r fine" x1="422" y1="189" x2="470" y2="189" data-sw="2"/>
+    <line class="r fine" x1="422" y1="201" x2="470" y2="201" data-sw="2"/>
+    <line class="r fine" x1="422" y1="213" x2="454" y2="213" data-sw="2"/>
+    <rect class="r" x="422" y="221" width="9" height="9" data-sw="2"/><line class="r fine" x1="435" y1="227" x2="470" y2="227" data-sw="2"/>
+    <text class="t2" x="444" y="255" font-size="19" text-anchor="middle">plan</text>
+   </g>
+   <g class="lp a-bounce">
+    <ellipse class="r" cx="720" cy="330" rx="100" ry="38" data-fill="white" data-fs="solid" data-sw="3.5"/>
+    <text class="t2" x="720" y="324" font-size="19" text-anchor="middle">why I wrote it</text>
+    <text class="t2" x="720" y="346" font-size="19" text-anchor="middle">this way</text>
+   </g>
+   <g class="lp a-scan">
+    <circle class="r" cx="340" cy="170" r="58" data-fill="white" data-fs="solid" data-sw="6"/>
+    <ellipse class="r" cx="340" cy="170" rx="32" ry="18" data-sw="3.5"/>
+    <circle cx="340" cy="170" r="8" fill="#1B1E23"/>
+    <line class="r" x1="298" y1="128" x2="258" y2="88" data-sw="10"/>
+   </g>
+   <text class="t" x="488" y="102" font-size="24" text-anchor="end">@red-team</text>
+   <text class="dtl t2" x="488" y="126" font-size="19" text-anchor="end">adversary</text><text class="pln t2" x="488" y="126" font-size="19" text-anchor="end">the critic</text>
+   <g data-at=".42">
+    <circle class="r" cx="175" cy="50" r="24" data-stroke="red" data-sw="4.5"/>
+    <line class="r" x1="164" y1="62" x2="186" y2="38" data-sw="6"/>
+    <line class="r" x1="158" y1="33" x2="192" y2="67" data-stroke="red" data-sw="4.5"/>
+    <text class="tr" x="212" y="58" font-size="20">no write tools</text>
+   </g>
+   <circle class="r" cx="90" cy="150" r="22" data-sw="4"/><circle class="r" cx="90" cy="240" r="22" data-sw="4"/><circle class="r" cx="90" cy="330" r="22" data-stroke="red" data-sw="4"/>
+   <text class="tg" x="124" y="157" font-size="22">PASS</text>
+   <text class="t" x="124" y="247" font-size="22">REVISE</text>
+   <text class="tr" x="124" y="337" font-size="22">BLOCK</text>
+   <g class="fd" data-at=".55"><circle cx="90" cy="240" r="15" fill="#1B1E23"/><text class="t2" x="124" y="270" font-size="16">applied, no second round</text></g>
+   <g class="fd" data-at=".68"><circle class="lp a-glow" cx="90" cy="150" r="15" fill="#1F9D5A"/></g>
+   <g data-at=".22" data-off=".5">
+    <text class="dtl tr" x="30" y="382" font-size="17">found a flaw that would've</text>
+    <text class="dtl tr" x="30" y="404" font-size="17">snuck past the test suite</text>
+    <text class="pln tr" x="30" y="382" font-size="17">found a bug the tests</text>
+    <text class="pln tr" x="30" y="404" font-size="17">would have missed</text>
+   </g>
+   <g class="stamp" data-at=".22" data-off=".5" style="--r:7deg"><rect class="r" x="195" y="272" width="168" height="48" data-stroke="red" data-sw="4.5"/><text class="stt" x="279" y="304" font-size="24" text-anchor="middle" fill="#C22A20">BLOCK &#10007;</text></g>
+   <g class="stamp" data-at=".68" style="--r:-8deg"><rect class="r" x="540" y="398" width="176" height="48" data-stroke="green" data-sw="4.5"/><text class="stt" x="628" y="430" font-size="24" text-anchor="middle" fill="#16804A">red-team &#10003;</text></g>
+   <g data-off=".47"><text class="tm" x="960" y="26" font-size="15" text-anchor="end" letter-spacing="2">ROUND 1</text></g>
+   <g data-at=".47"><text class="tm" x="960" y="26" font-size="15" text-anchor="end" letter-spacing="2">ROUND 2</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">03b</span><span data-s="Challenge it">Attack</span><code>@red-team</code></p>
+   <h2 data-s="A second AI agent tries to tear the plan apart<span class=&quot;subh&quot;>Feedback: breakfast of champions.</span>">A hostile reviewer attacks the plan 'til it's pristine<span class="subh">Feedback: breakfast of champions.</span></h2>
+   <p class="sent" data-s="Its only job is to find holes in the plan, while fixing them is still cheap.">A pedantic reviewer agent tries to poke <b>any</b> holes it can in the plan &mdash; fixing flaws now before they become costly bugs later.</p>
+   <p class="sent" data-s="It never sees the author's reasoning and has no power to edit the plan, so it cannot be talked round, and cannot quietly patch over what it finds.">Reviewer can't see the author's rationale or edit the plan &mdash; no external influence, no shortcuts or mistakes silently made.</p>
+   <p class="sent" data-s="Two rounds maximum. If they still disagree after that, I decide.">Capped to 2 rounds, human makes calls to resolve a plan that's churning.</p>
+   <button class="how" type="button" data-card="c5">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 06 JUNCTION -->
+<section class="st" id="s6" data-num="04a" data-lay="R" data-name="The junction" style="--len:1.8">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A railway switch sends the change down the medium track to the one specialist who owns that surface; the small track leads to the orchestrator and the large track to an architect's plan.">
+   <path class="r" d="M470 212 C 400 300, 230 360, 175 460" data-sw="4.5"/><path class="r" d="M488 222 C 420 310, 250 372, 197 462" data-sw="4.5"/>
+   <path class="r" d="M490 212 C 560 300, 730 360, 785 460" data-sw="4.5"/><path class="r" d="M472 222 C 540 310, 710 372, 763 462" data-sw="4.5"/>
+   <circle class="r" cx="480" cy="200" r="12" data-fill="ink" data-fs="solid" data-sw="3"/>
+   <rect class="r" x="588" y="196" width="44" height="22" data-fill="ink" data-fs="solid" data-sw="3"/>
+   <g class="rot keep" data-at=".25" style="--a0:-35deg;--a1:30deg;transform-origin:610px 200px">
+    <line class="r" x1="610" y1="200" x2="610" y2="132" data-sw="7"/>
+    <circle class="r" cx="610" cy="126" r="11" data-fill="red" data-fs="solid" data-stroke="red" data-sw="3"/>
+   </g>
+   <text class="t2" x="640" y="224" font-size="19">switch</text>
+   <text class="t" x="282" y="300" font-size="30">S</text>
+   <text class="t" x="502" y="300" font-size="30">M</text>
+   <text class="t" x="690" y="300" font-size="30">L</text>
+   <rect class="r" x="80" y="470" width="210" height="72" data-fill="white" data-fs="solid" data-sw="4"/>
+   <text class="t" x="185" y="501" font-size="21" text-anchor="middle">small: orchestrator</text>
+   <text class="t2" x="185" y="527" font-size="18" text-anchor="middle">builds it directly</text>
+   <rect class="r" x="690" y="470" width="236" height="72" data-fill="white" data-fs="solid" data-sw="4"/>
+   <text class="t" x="808" y="501" font-size="21" text-anchor="middle">large: @architect</text>
+   <text class="t2" x="808" y="527" font-size="18" text-anchor="middle">plans, splits by layer</text>
+   <g data-at=".4"><rect class="r" x="360" y="428" width="240" height="172" data-stroke="ink2" data-sw="2.5" data-rough="2"/><text class="t2" x="372" y="624" font-size="19">its remit</text></g>
+   <rect class="r" x="400" y="520" width="160" height="16" data-fill="ink" data-fs="solid" data-sw="3"/>
+   <line class="r" x1="412" y1="536" x2="408" y2="552" data-sw="4"/><line class="r" x1="548" y1="536" x2="552" y2="552" data-sw="4"/>
+   <rect class="r" x="395" y="552" width="170" height="30" data-fill="white" data-fs="solid" data-sw="3"/>
+   <text class="tk" x="480" y="573" font-size="16" text-anchor="middle">@ops-api-eng</text>
+   <g data-at=".5"><g class="lp a-flash"><line class="r" x1="568" y1="470" x2="590" y2="452" data-sw="3.5"/><line class="r" x1="574" y1="490" x2="600" y2="488" data-sw="3.5"/><line class="r" x1="566" y1="506" x2="586" y2="522" data-sw="3.5"/></g></g>
+   <g data-at=".45"><text class="t2" x="620" y="592" font-size="19">stops at its edge,</text><text class="t2" x="620" y="615" font-size="19">names the owner</text></g>
+   <g class="stamp" data-at=".7" style="--r:-6deg"><rect class="r" x="80" y="588" width="226" height="54" data-sw="4.5"/><text class="stt" x="193" y="624" font-size="23" text-anchor="middle" fill="#1B1E23">built by owner</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">04a</span><span>Build</span><code><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span class="vh">run by a person: </span>/ticket-build</code></p>
+   <h2 data-s="Work is routed to the agent that owns it<span class=&quot;subh&quot;>Whoever looks after that part.</span>">Work gets routed to the right specialist agent<span class="subh">Based on scope, not blast radius.</span></h2>
+   <p class="sent" data-s="Small, self-contained work gets built directly. Medium work goes to the specialist agent that owns that part of the system. Large work gets a plan first, split by area, then each piece goes to its owner.">Small, single-scope work gets built directly. Medium work is handed to the specialist agent who owns that domain. Large and extra-large work first gets a plan splitting it by domain, then each piece goes to its right agent.</p>
+   <button class="how" type="button" data-card="c6">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 07 CHECKPOINTS -->
+<section class="st" id="s7" data-num="04b" data-lay="T" data-name="Checkpoints" style="--len:2">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 460" role="img" aria-label="Three review booths in a row. Security fires because the change touches the API; architecture review is skipped for a medium change; coverage review checks every criterion maps to a test.">
+   <g data-at=".08"><g transform="rotate(-4 700 40)"><rect class="r" x="600" y="20" width="200" height="40" data-fill="white" data-fs="solid" data-sw="3.5"/><circle class="r" cx="614" cy="40" r="5" data-sw="2.5"/><text class="tk" x="628" y="46" font-size="16">apps/api/routes/&hellip;</text></g></g>
+   <rect class="r" x="720" y="160" width="160" height="160" data-fill="white" data-fs="solid" data-sw="5"/>
+   <rect class="r" x="730" y="118" width="140" height="38" data-fill="white" data-fs="solid" data-sw="4"/>
+   <text class="stt" x="800" y="145" font-size="19" text-anchor="middle" fill="#1B1E23">security</text>
+   <circle class="r lp a-pulse" cx="800" cy="100" r="12" data-fill="red" data-fs="solid" data-stroke="red" data-sw="3"/>
+   <g data-at=".2"><g class="lp a-blink"><line class="r" x1="800" y1="80" x2="800" y2="66" data-stroke="red" data-sw="4"/><line class="r" x1="778" y1="94" x2="765" y2="86" data-stroke="red" data-sw="4"/><line class="r" x1="822" y1="94" x2="835" y2="86" data-stroke="red" data-sw="4"/></g></g>
+   <g data-at=".24"><text class="tr" x="964" y="372" font-size="19" text-anchor="end">fires on the path,</text><text class="tr" x="964" y="396" font-size="19" text-anchor="end">not on request</text></g>
+   <rect class="r" x="420" y="160" width="160" height="160" data-fill="white" data-fs="solid" data-stroke="ink2" data-sw="4" data-rough="1.6"/>
+   <rect class="r" x="430" y="118" width="140" height="38" data-fill="white" data-fs="solid" data-stroke="ink2" data-sw="3.5"/>
+   <text class="stt" x="500" y="145" font-size="19" text-anchor="middle" fill="#4E5660">architect</text>
+   
+   <rect class="r" x="120" y="160" width="160" height="160" data-fill="white" data-fs="solid" data-sw="5"/>
+   <rect class="r" x="130" y="118" width="140" height="38" data-fill="white" data-fs="solid" data-sw="4"/>
+   <text class="stt" x="200" y="145" font-size="19" text-anchor="middle" fill="#1B1E23">coverage</text>
+   <text class="tm" x="200" y="186" font-size="15" text-anchor="middle">@qa-eng</text>
+   <g data-at=".66">
+    <text class="t2" x="200" y="24" font-size="18" text-anchor="middle">each criterion &rarr; a test</text>
+    <circle cx="150" cy="50" r="5" fill="#1B1E23"/><circle cx="150" cy="75" r="5" fill="#1B1E23"/><circle cx="150" cy="100" r="5" fill="#1B1E23"/>
+    <line class="r" x1="160" y1="50" x2="232" y2="50" data-sw="3"/><line class="r" x1="160" y1="75" x2="232" y2="75" data-sw="3"/><line class="r" x1="160" y1="100" x2="232" y2="100" data-sw="3"/>
+    <path class="r" d="M240 48 l6 7 l12 -14" data-stroke="green" data-sw="4"/><path class="r" d="M240 73 l6 7 l12 -14" data-stroke="green" data-sw="4"/><path class="r" d="M240 98 l6 7 l12 -14" data-stroke="green" data-sw="4"/>
+   </g>
+   <g class="stamp" data-at=".36" style="--r:-8deg"><rect class="r" x="585" y="84" width="122" height="44" data-stroke="green" data-sw="4.5"/><text class="stt" x="646" y="114" font-size="22" text-anchor="middle" fill="#16804A">sec &#10003;</text></g>
+   <g class="stamp" data-at=".82" style="--r:-6deg"><rect class="r" x="298" y="84" width="112" height="44" data-stroke="green" data-sw="4.5"/><text class="stt" x="354" y="114" font-size="22" text-anchor="middle" fill="#16804A">qa &#10003;</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">04b</span><span>Review</span><code>@security-eng &middot; @qa-eng</code></p>
+   <h2 data-s="The important reviews start themselves<span class=&quot;subh&quot;>I hope you like feedback.</span>">Crucial reviews are triggered, not requested<span class="subh">I hope you like feedback.</span></h2>
+   <p class="sent" data-s="Anything touching logins, payments, the database or the API triggers a security review whether it was asked for or not. Changes that cross areas or introduce a new pattern pull in the architect agent. Every ticket gets a quality review, scaled to its size.">Any work that touched a high-risk path (auth, payments, DB or API) or adds a new attack surface gets a mandated security agent review. Changes that are cross-domain, add a new pattern, or touch an API or schema summon the architect agent. Every ticket gets audited by the QA agent, with scope scaling to the ticket's size.</p>
+   <button class="how" type="button" data-card="c7">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 08 INTERLOCK -->
+<section class="st" id="s8" data-num="04c" data-lay="L" data-name="Quality gates" style="--len:1.9">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="The change passes through a pre-commit scanner arch while twelve check lamps turn green one by one.">
+   <path class="r" d="M280 450 L280 235 Q280 175 340 175 L440 175 Q500 175 500 235 L500 450" data-sw="7"/>
+   <line class="r" x1="250" y1="450" x2="530" y2="450" data-sw="6"/>
+   <text class="t" x="390" y="150" font-size="28" text-anchor="middle">pre-commit</text>
+   <g data-at=".24"><g class="lp a-scanx" style="opacity:.55"><line class="r" x1="298" y1="200" x2="298" y2="440" data-stroke="red" data-sw="4"/></g></g>
+   <circle class="r" cx="470" cy="232" r="10" data-fill="ink" data-fs="solid" data-sw="2.5"/>
+   <g class="rot keep" data-at=".66" style="--a0:0deg;--a1:-74deg;transform-origin:470px 232px">
+    <rect class="r" x="461" y="238" width="19" height="140" data-fill="white" data-fs="solid" data-sw="3.5"/>
+    <rect class="r" x="461" y="248" width="19" height="24" data-fill="red" data-fs="solid" data-stroke="none"/>
+    <rect class="r" x="461" y="296" width="19" height="24" data-fill="red" data-fs="solid" data-stroke="none"/>
+    <rect class="r" x="461" y="344" width="19" height="24" data-fill="red" data-fs="solid" data-stroke="none"/>
+   </g>
+   <rect class="r" x="560" y="140" width="410" height="440" data-fill="white" data-fs="solid" data-sw="5"/>
+   <text class="t" x="585" y="188" font-size="28">12 checks</text>
+   <circle class="r" cx="598" cy="235" r="13" data-sw="3.5"/><g class="fd" data-at=".30"><circle cx="598" cy="235" r="10" fill="#1F9D5A"/></g><text class="t" x="622" y="242" font-size="20">format + lint</text>
+   <circle class="r" cx="598" cy="288" r="13" data-sw="3.5"/><g class="fd" data-at=".33"><circle cx="598" cy="288" r="10" fill="#1F9D5A"/></g><text class="t" x="622" y="295" font-size="20">markdown</text>
+   <circle class="r" cx="598" cy="341" r="13" data-sw="3.5"/><g class="fd" data-at=".36"><circle cx="598" cy="341" r="10" fill="#1F9D5A"/></g><text class="t" x="622" y="348" font-size="20">secrets</text>
+   <circle class="r" cx="598" cy="394" r="13" data-sw="3.5"/><g class="fd" data-at=".39"><circle cx="598" cy="394" r="10" fill="#1F9D5A"/></g><text class="t" x="622" y="401" font-size="20">typecheck</text>
+   <circle class="r" cx="598" cy="447" r="13" data-sw="3.5"/><g class="fd" data-at=".42"><circle cx="598" cy="447" r="10" fill="#1F9D5A"/></g><text class="t" x="622" y="454" font-size="20">cookie flags</text>
+   <circle class="r" cx="598" cy="500" r="13" data-sw="3.5"/><g class="fd" data-at=".45"><circle cx="598" cy="500" r="10" fill="#1F9D5A"/></g><text class="t" x="622" y="507" font-size="20">legacy terms</text>
+   <circle class="r" cx="783" cy="235" r="13" data-sw="3.5"/><g class="fd" data-at=".48"><circle cx="783" cy="235" r="10" fill="#1F9D5A"/></g><text class="t" x="807" y="242" font-size="20">raw tokens</text>
+   <circle class="r" cx="783" cy="288" r="13" data-sw="3.5"/><g class="fd" data-at=".51"><circle cx="783" cy="288" r="10" fill="#1F9D5A"/></g><text class="t" x="807" y="295" font-size="20">em-dashes</text>
+   <circle class="r" cx="783" cy="341" r="13" data-sw="3.5"/><g class="fd" data-at=".54"><circle cx="783" cy="341" r="10" fill="#1F9D5A"/></g><text class="t" x="807" y="348" font-size="20">brand drift</text>
+   <circle class="r" cx="783" cy="394" r="13" data-sw="3.5"/><g class="fd" data-at=".57"><circle cx="783" cy="394" r="10" fill="#1F9D5A"/></g><text class="t" x="807" y="401" font-size="20">journal order</text>
+   <circle class="r" cx="783" cy="447" r="13" data-sw="3.5"/><g class="fd" data-at=".60"><circle cx="783" cy="447" r="10" fill="#1F9D5A"/></g><text class="t" x="807" y="454" font-size="20">auth redaction</text>
+   <circle class="r" cx="783" cy="500" r="13" data-sw="3.5"/><g class="fd" data-at=".63"><circle cx="783" cy="500" r="10" fill="#1F9D5A"/></g><text class="t" x="807" y="507" font-size="19">browser redaction</text>
+   <g data-at=".72"><text class="t2" x="585" y="552" font-size="19">eight of these were incidents once</text></g>
+   <g class="stamp" data-at=".7" style="--r:-7deg"><rect class="r" x="200" y="560" width="210" height="56" data-stroke="green" data-sw="4.5"/><text class="stt" x="305" y="597" font-size="26" text-anchor="middle" fill="#16804A">commit &#10003;</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">04c</span><span>Commit</span><code>lefthook</code></p>
+   <h2 data-s="Nothing gets committed until it passes the checks<span class=&quot;subh&quot;>Fix that shit or you can't commit.</span>">Nothing is committed until it clears our quality gates<span class="subh">Fix that shit or you can't commit.</span></h2>
+   <p class="sent" data-s="Formatting, linting, leaked secrets, type errors and every recurring mistake we have written a check for are all caught on the spot, before the code leaves the machine that wrote it.">Shift left: stringent linting, formatting, secret, and typecheck scanners catch and resolve standards violations and recurring issues we added checks for, before they ever leave an engineer's machine.</p>
+   <button class="how" type="button" data-card="c8">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 09 MEASURE -->
+<section class="st" id="s9" data-num="04d" data-lay="R" data-name="Measure, don't ask" style="--len:1.9">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A speech bubble saying 'trust me, I'm sure' is crossed out. Six gauges read facts from the diff; an unknown reading counts as no. The change opens its own pull request while the merge door stays locked for a human.">
+   <ellipse class="r" cx="220" cy="120" rx="150" ry="52" data-fill="white" data-fs="solid" data-sw="4"/>
+   <path class="r" d="M172 166 L150 206 L214 171" data-fill="white" data-fs="solid" data-sw="4"/>
+   <text class="t" x="220" y="130" font-size="27" text-anchor="middle">trust me, I'm sure</text>
+   <g data-at=".08"><line class="r" x1="100" y1="70" x2="340" y2="176" data-stroke="red" data-sw="8"/><line class="r" x1="340" y1="70" x2="100" y2="176" data-stroke="red" data-sw="8"/></g>
+   <g data-at=".1"><text class="tr" x="220" y="238" font-size="21" text-anchor="middle">self-report is ignored</text></g>
+   <path class="r" d="M474 250 A46 46 0 0 1 566 250" data-sw="4.5"/><line class="r" x1="468" y1="250" x2="572" y2="250" data-sw="3"/><path class="r" d="M552 218 A46 46 0 0 1 566 250" data-stroke="green" data-sw="7"/>
+   <g class="rot keep" data-at=".18" style="--a0:-75deg;--a1:58deg;transform-origin:520px 250px"><line class="r" x1="520" y1="250" x2="520" y2="214" data-sw="4.5"/></g><circle cx="520" cy="250" r="5" fill="#1B1E23"/>
+   <text class="t" x="520" y="282" font-size="19" text-anchor="middle">not trunk</text>
+   <path class="r" d="M624 250 A46 46 0 0 1 716 250" data-sw="4.5"/><line class="r" x1="618" y1="250" x2="722" y2="250" data-sw="3"/><path class="r" d="M702 218 A46 46 0 0 1 716 250" data-stroke="green" data-sw="7"/>
+   <g class="rot keep" data-at=".22" style="--a0:-75deg;--a1:58deg;transform-origin:670px 250px"><line class="r" x1="670" y1="250" x2="670" y2="214" data-sw="4.5"/></g><circle cx="670" cy="250" r="5" fill="#1B1E23"/>
+   <text class="t" x="670" y="282" font-size="19" text-anchor="middle">&le; 5 files</text>
+   <path class="r" d="M774 250 A46 46 0 0 1 866 250" data-sw="4.5"/><line class="r" x1="768" y1="250" x2="872" y2="250" data-sw="3"/><path class="r" d="M852 218 A46 46 0 0 1 866 250" data-stroke="green" data-sw="7"/>
+   <g class="rot keep" data-at=".26" style="--a0:-75deg;--a1:58deg;transform-origin:820px 250px"><line class="r" x1="820" y1="250" x2="820" y2="214" data-sw="4.5"/></g><circle cx="820" cy="250" r="5" fill="#1B1E23"/>
+   <text class="t" x="820" y="282" font-size="19" text-anchor="middle">one scope</text>
+   <path class="r" d="M474 400 A46 46 0 0 1 566 400" data-sw="4.5"/><line class="r" x1="468" y1="400" x2="572" y2="400" data-sw="3"/><path class="r" d="M552 368 A46 46 0 0 1 566 400" data-stroke="green" data-sw="7"/>
+   <g class="rot keep" data-at=".30" style="--a0:-75deg;--a1:58deg;transform-origin:520px 400px"><line class="r" x1="520" y1="400" x2="520" y2="364" data-sw="4.5"/></g><circle cx="520" cy="400" r="5" fill="#1B1E23"/>
+   <text class="t" x="520" y="432" font-size="19" text-anchor="middle">safe paths</text>
+   <path class="r" d="M624 400 A46 46 0 0 1 716 400" data-sw="4.5"/><line class="r" x1="618" y1="400" x2="722" y2="400" data-sw="3"/><path class="r" d="M702 368 A46 46 0 0 1 716 400" data-stroke="green" data-sw="7"/>
+   <g class="rot keep" data-at=".34" style="--a0:-75deg;--a1:58deg;transform-origin:670px 400px"><line class="r" x1="670" y1="400" x2="670" y2="364" data-sw="4.5"/></g><circle cx="670" cy="400" r="5" fill="#1B1E23"/>
+   <text class="t" x="670" y="432" font-size="19" text-anchor="middle">plan ticked</text>
+   <path class="r" d="M774 400 A46 46 0 0 1 866 400" data-sw="4.5"/><line class="r" x1="768" y1="400" x2="872" y2="400" data-sw="3"/><path class="r" d="M852 368 A46 46 0 0 1 866 400" data-stroke="green" data-sw="7"/>
+   <g class="rot keep" data-at=".38" style="--a0:-75deg;--a1:58deg;transform-origin:820px 400px"><line class="r" x1="820" y1="400" x2="820" y2="364" data-sw="4.5"/></g><circle cx="820" cy="400" r="5" fill="#1B1E23"/>
+   <text class="t" x="820" y="432" font-size="19" text-anchor="middle">suites green</text>
+   <g data-at=".44"><circle class="r" cx="945" cy="325" r="34" data-sw="3" data-rough="2"/><g class="lp a-wiggle"><text class="t" x="945" y="341" font-size="44" text-anchor="middle">?</text></g><text class="tr" x="945" y="394" font-size="22" text-anchor="middle">= no</text></g>
+   <g data-at=".48"><use href="#human" x="928" y="416" width="34" height="34" style="color:var(--red-t)"/><text class="tr" x="945" y="474" font-size="19" text-anchor="middle">asks a person</text></g>
+   <text class="tg" x="294" y="506" font-size="22" text-anchor="end">open PR</text>
+   <rect class="r" x="300" y="490" width="120" height="170" data-sw="5"/>
+   <g data-off=".55"><rect class="r" x="306" y="496" width="108" height="158" data-fill="ink" data-fs="hachure" data-gap="12" data-sw="2"/></g>
+   <g class="fd" data-at=".55"><polygon class="r" points="300,490 342,512 342,640 300,660" data-fill="green" data-fs="hachure" data-gap="9" data-stroke="green" data-sw="4"/></g>
+   <g data-at=".55"><text class="tg" x="290" y="566" font-size="18" text-anchor="end">cheap &middot; reversible</text></g>
+   <text class="t" x="620" y="478" font-size="22" text-anchor="middle">merge</text>
+   <rect class="r" x="560" y="490" width="120" height="170" data-sw="5"/>
+   <rect class="r" x="566" y="496" width="108" height="158" data-fill="ink" data-fs="hachure" data-gap="12" data-sw="2"/>
+   <g class="lp a-wiggle"><rect class="r" x="600" y="560" width="40" height="34" data-fill="red" data-fs="solid" data-stroke="red" data-sw="3"/><path class="r" d="M608 560 L608 546 Q620 532 632 546 L632 560" data-stroke="red" data-sw="4.5"/></g>
+   <g data-at=".6"><use href="#human" x="700" y="548" width="34" height="34" style="color:var(--red-t)"/><text class="tr" x="744" y="572" font-size="21">only a person</text><text class="tr" x="744" y="596" font-size="21">merges</text></g>
+   <g class="stamp" data-at=".68" style="--r:-7deg"><rect class="r" x="80" y="608" width="206" height="54" data-stroke="green" data-sw="4.5"/><text class="stt" x="183" y="644" font-size="24" text-anchor="middle" fill="#16804A">PR opened</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">04d</span><span>Ship</span><code><span class="auto" aria-hidden="true">&#8627;</span><span class="vh">fires automatically: </span>/ticket-create-pr</code></p>
+   <h2 data-s="Low-risk changes open their own pull request<span class=&quot;subh&quot;>But only if they meet the bar.</span>">Low-risk changes get an auto PR<span class="subh">But only if they meet the bar.</span></h2>
+   <p class="sent" data-s="Six facts about the actual change decide whether a ticket may open its own pull request. Any uncertainty counts as no, so anything larger or riskier goes to a person to judge.">Six facts from the diff decide whether we let this lil' ticket raise its own pull request. Any uncertainty means no, so larger or riskier changes get handed to a human to decide if it's ready to pull request.</p>
+   <button class="how" type="button" data-card="c9">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+<!-- 10 CI -->
+<section class="st" id="s10" data-num="05a" data-lay="L" data-name="Only what changed" style="--len:1.8">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="Three changed files pass through path filters; only the four test suites they can affect light up, and all four report into one required CI check.">
+   <g transform="rotate(-3 150 165)"><rect class="r" x="30" y="100" width="240" height="130" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="t" x="50" y="140" font-size="24">3 files changed</text>
+    <text class="tk fine" x="50" y="172" font-size="15">apps/api/routes/&hellip;</text>
+    <text class="tk fine" x="50" y="196" font-size="15">packages/shared/&hellip;</text>
+    <text class="tk fine" x="50" y="220" font-size="15">&hellip;/orders.test.ts</text></g>
+   <polygon class="r" points="310,165 470,165 408,252 372,252" data-fill="white" data-fs="solid" data-sw="5"/>
+   <text class="t2" x="485" y="204" font-size="21">path filters</text>
+   <rect class="r" x="520" y="290" width="260" height="380" data-fill="white" data-fs="solid" data-sw="5"/>
+   <circle class="r" cx="550" cy="335" r="12" data-sw="3.5"/><g class="fd" data-at=".30"><circle cx="550" cy="335" r="9" fill="#1F9D5A"/></g><text class="t" x="574" y="342" font-size="19">static</text>
+   <circle class="r" cx="550" cy="385" r="12" data-sw="3.5"/><g class="fd" data-at=".34"><circle cx="550" cy="385" r="9" fill="#1F9D5A"/></g><text class="t" x="574" y="392" font-size="19">unit &middot; packages</text>
+   <circle class="r" cx="550" cy="435" r="12" data-stroke="ink2" data-sw="2.5"/><text class="t2" x="574" y="442" font-size="19">unit &middot; admin</text>
+   <circle class="r" cx="550" cy="485" r="12" data-stroke="ink2" data-sw="2.5"/><text class="t2" x="574" y="492" font-size="19">unit &middot; web</text>
+   <circle class="r" cx="550" cy="535" r="12" data-sw="3.5"/><g class="fd" data-at=".38"><circle cx="550" cy="535" r="9" fill="#1F9D5A"/></g><text class="t" x="574" y="542" font-size="19">integration</text>
+   <circle class="r" cx="550" cy="585" r="12" data-stroke="ink2" data-sw="2.5"/><text class="t2" x="574" y="592" font-size="19">component</text>
+   <circle class="r" cx="550" cy="635" r="12" data-sw="3.5"/><g class="fd" data-at=".42"><circle cx="550" cy="635" r="9" fill="#1F9D5A"/></g><text class="t" x="574" y="642" font-size="19">E2E &middot; selective</text>
+   <g data-at=".46"><text class="t2" x="650" y="692" font-size="17" text-anchor="middle">grey: can't be affected, skipped</text></g>
+   <g data-at=".5">
+    <path class="r" d="M650 335 C 790 335, 820 456, 848 464" data-sw="3"/>
+    <path class="r" d="M726 385 C 800 385, 822 460, 848 468" data-sw="3"/>
+    <path class="r" d="M690 535 C 800 535, 822 478, 848 474" data-sw="3"/>
+    <path class="r" d="M726 635 C 810 635, 826 484, 850 478" data-sw="3"/>
+   </g>
+   <circle class="r" cx="895" cy="470" r="48" data-fill="white" data-fs="solid" data-sw="6"/>
+   <g class="fd" data-at=".6"><circle class="lp a-glow" cx="895" cy="470" r="38" fill="#1F9D5A"/></g>
+   <text class="t" x="895" y="554" font-size="24" text-anchor="middle">CI pass</text>
+   <text class="t2" x="895" y="579" font-size="17" text-anchor="middle">the one required check</text>
+   <g class="stamp" data-at=".68" style="--r:-6deg"><rect class="r" x="120" y="470" width="150" height="56" data-stroke="green" data-sw="4.5"/><text class="stt" x="195" y="507" font-size="26" text-anchor="middle" fill="#16804A">CI &#10003;</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">05a</span><span>Verify</span><code>ci.yml</code></p>
+   <h2 data-s="We only run the tests this job might've broken<span class=&quot;subh&quot;>Testing time is not free.</span>">CI smarts test only what might've broken<span class="subh">Make every Action Minute count (cause they ain't cheap).</span></h2>
+   <p class="sent" data-s="The test suites that run on every change look at exactly which files were touched, then run only the tests those files could affect.">Our continuous integration test suites that run on every change use what files changed to select the exact tests to enforce running.</p>
+   <p class="sent" data-s="Cuts build cost and build time <em>without</em> giving up confidence in the result.">Optimises build cost and CI build times <em>without</em> sacrificing confidence of quality.</p>
+   <button class="how" type="button" data-card="c10">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 11 FOUR CORNERS -->
+<section class="st" id="s11" data-num="05b" data-lay="R" data-name="Four corners" style="--len:1.8">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="Four screens, phone and desktop in light and dark, each photographed and ticked, beside the same ticket from stage four with three plan items ticked automatically and the manual one still open for a person.">
+   <rect class="r" x="120" y="110" width="110" height="200" data-fill="white" data-fs="solid" data-sw="5"/><line class="r fine" x1="160" y1="126" x2="190" y2="126" data-sw="3"/>
+   <text class="t2" x="175" y="338" font-size="19" text-anchor="middle">375 &middot; light</text>
+   <rect class="r" x="290" y="120" width="290" height="180" data-fill="white" data-fs="solid" data-sw="5"/>
+   <line class="r" x1="435" y1="300" x2="435" y2="320" data-sw="4"/><line class="r" x1="395" y1="322" x2="475" y2="322" data-sw="4"/>
+   <text class="t2" x="435" y="346" font-size="19" text-anchor="middle">1280 &middot; light</text>
+   <rect class="r" x="120" y="390" width="110" height="200" data-fill="ink" data-fs="solid" data-sw="5"/>
+   <text class="t2" x="175" y="618" font-size="19" text-anchor="middle">375 &middot; dark</text>
+   <rect class="r" x="290" y="400" width="290" height="180" data-fill="ink" data-fs="solid" data-sw="5"/>
+   <line class="r" x1="435" y1="580" x2="435" y2="600" data-sw="4"/><line class="r" x1="395" y1="602" x2="475" y2="602" data-sw="4"/>
+   <text class="t2" x="435" y="626" font-size="19" text-anchor="middle">1280 &middot; dark</text>
+   <g class="pop" data-at=".28"><path class="r" d="M156 212 l12 14 l26 -32" data-stroke="green" data-sw="7"/></g>
+   <g class="pop" data-at=".36"><path class="r" d="M416 212 l12 14 l26 -32" data-stroke="green" data-sw="7"/></g>
+   <g class="pop" data-at=".44"><path class="r" d="M156 492 l12 14 l26 -32" data-stroke="green" data-sw="7"/></g>
+   <g class="pop" data-at=".52"><path class="r" d="M416 492 l12 14 l26 -32" data-stroke="green" data-sw="7"/></g>
+   <rect class="r" x="700" y="190" width="120" height="78" data-fill="white" data-fs="solid" data-sw="5"/>
+   <rect class="r" x="714" y="176" width="32" height="16" data-sw="3.5"/>
+   <circle class="r" cx="760" cy="229" r="24" data-sw="4.5"/>
+   <g data-at=".26"><g class="lp a-flash"><line class="r" x1="722" y1="166" x2="712" y2="148" data-sw="3.5"/><line class="r" x1="730" y1="163" x2="730" y2="142" data-sw="3.5"/><line class="r" x1="738" y1="166" x2="748" y2="148" data-sw="3.5"/></g></g>
+   <g data-at=".56"><text class="t2" x="735" y="312" font-size="18">every instance measured,</text><text class="t2" x="735" y="335" font-size="18">overflow re-checked</text></g>
+   <g data-at=".54">
+    <rect class="r" x="716" y="372" width="234" height="288" data-fill="white" data-fs="solid" data-sw="4.5"/>
+    <text class="tk" x="736" y="402" font-size="16">#2041</text>
+    <text class="t" x="736" y="430" font-size="20">test plan</text>
+    <line class="r" x1="716" y1="444" x2="950" y2="444" data-sw="2.5"/>
+    <rect class="r" x="736" y="462" width="20" height="20" data-sw="3"/><text class="t" x="768" y="479" font-size="16">409 on overlap</text>
+    <rect class="r" x="736" y="500" width="20" height="20" data-sw="3"/><text class="t" x="768" y="517" font-size="16">archived hidden</text>
+    <rect class="r" x="736" y="538" width="20" height="20" data-sw="3"/><text class="t" x="768" y="555" font-size="16">keyboard reachable</text>
+    <rect class="r" x="736" y="576" width="20" height="20" data-stroke="red" data-sw="3"/><text class="t" x="768" y="593" font-size="16">empty state</text><text class="tr" x="938" y="593" font-size="14" text-anchor="end">MANUAL</text>
+   </g>
+   <g class="pop" data-at=".6"><path class="r" d="M736 470 l7 9 l18 -20" data-stroke="green" data-sw="5"/></g>
+   <g class="pop" data-at=".63"><path class="r" d="M736 508 l7 9 l18 -20" data-stroke="green" data-sw="5"/></g>
+   <g class="pop" data-at=".66"><path class="r" d="M736 546 l7 9 l18 -20" data-stroke="green" data-sw="5"/></g>
+   <g data-at=".7"><use href="#human" x="736" y="604" width="24" height="24" style="color:var(--red-t)"/><text class="tr" x="766" y="621" font-size="15">waits for a person,</text><text class="t2" x="736" y="646" font-size="15">so the ticket stays open</text></g>
+   <g class="stamp" data-at=".68" style="--r:-5deg"><rect class="r" x="300" y="640" width="176" height="50" data-stroke="green" data-sw="4.5"/><text class="stt" x="388" y="674" font-size="22" text-anchor="middle" fill="#16804A">4 corners &#10003;</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">05b</span><span>Verify</span><code><span class="auto" aria-hidden="true">&#8627;</span><span class="vh">fires automatically: </span>/test-run-pr</code></p>
+   <h2 data-s="Bots go browsing for bugs to bash<span class=&quot;subh&quot;>Phone and desktop, light and dark.</span>">Bots go browsing for bugs to bash<span class="subh">All 4 corners, across all modes.</span></h2>
+   <p class="sent" data-s="Every item on the test plan is run for real in a browser, driven by an agent, with the aim of getting manual testing to zero. Anything visual is checked at phone and desktop widths in both light and dark mode, screenshotting as it goes, so I can follow along and finish the few items marked manual.">Every checklist item is run for real in a browser driven by Playwright, aiming to get manual human testing down to zero. And any visual test is checked at phone and desktop widths, in both light and dark modes &mdash; snapping screenshots as it goes so a human can follow along, then take over to complete any test plan items marked MANUAL (including any the agent couldn't verify).</p>
+   <button class="how" type="button" data-card="c11">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 12 MANY LINES -->
+<section class="st" id="s12" data-num="10x" data-lay="T" data-name="Many lines" style="--len:2">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 460" role="img" aria-label="The change's siblings travel on parallel tracks in three waves. A clash over the same file bumps one to a later wave, each change runs in its own worktree, and every track merges at the end.">
+   <path class="r" d="M80 62 L80 48 L330 48 L330 62" data-sw="4"/><text class="t" x="205" y="34" font-size="24" text-anchor="middle">wave 1</text>
+   <path class="r" d="M370 62 L370 48 L620 48 L620 62" data-sw="4"/><text class="t" x="495" y="34" font-size="24" text-anchor="middle">wave 2</text>
+   <path class="r" d="M700 62 L700 48 L930 48 L930 62" data-sw="4"/><text class="t" x="815" y="34" font-size="24" text-anchor="middle">wave 3</text>
+   <g style="opacity:.55">
+    <line class="r" x1="80" y1="130" x2="330" y2="130" data-stroke="blue" data-sw="5"/><line class="r" x1="80" y1="250" x2="330" y2="250" data-stroke="blue" data-sw="5"/>
+    <line class="r" x1="370" y1="110" x2="620" y2="110" data-stroke="blue" data-sw="5"/><line class="r" x1="370" y1="290" x2="620" y2="290" data-stroke="blue" data-sw="5"/>
+    <line class="r" x1="700" y1="130" x2="930" y2="130" data-stroke="blue" data-sw="5"/><line class="r" x1="700" y1="250" x2="930" y2="250" data-stroke="blue" data-sw="5"/>
+   </g>
+   <g class="lp a-slide"><rect class="r" x="90" y="113" width="40" height="34" data-fill="white" data-fs="solid" data-sw="3.5"/></g>
+   <g class="lp a-slide" style="animation-delay:-2.4s"><rect class="r" x="90" y="233" width="40" height="34" data-fill="white" data-fs="solid" data-sw="3.5"/></g>
+   <g class="lp a-slide" style="animation-delay:-1.1s"><rect class="r" x="380" y="93" width="40" height="34" data-fill="white" data-fs="solid" data-sw="3.5"/></g>
+   <g class="lp a-slide" style="animation-delay:-3.7s"><rect class="r" x="380" y="273" width="40" height="34" data-fill="white" data-fs="solid" data-sw="3.5"/></g>
+   <g class="lp a-slide" style="animation-delay:-.6s"><rect class="r" x="712" y="113" width="40" height="34" data-fill="white" data-fs="solid" data-sw="3.5"/></g>
+   <g class="lp a-slide" style="animation-delay:-3s"><rect class="r" x="712" y="233" width="40" height="34" data-fill="white" data-fs="solid" data-sw="3.5"/></g>
+   <g data-at=".3">
+    <path class="r" d="M300 262 C 334 300, 356 302, 388 294" data-stroke="red" data-sw="4"/><path class="r" d="M374 284 L390 294 L374 304" data-stroke="red" data-sw="4"/>
+    <text class="tr" x="205" y="300" font-size="19" text-anchor="middle">same file:</text><text class="tr" x="205" y="322" font-size="19" text-anchor="middle">later wave</text>
+   </g>
+   <g data-at=".45"><text class="t2" x="495" y="342" font-size="19" text-anchor="middle">one worktree per change</text></g>
+   <g data-at=".62"><circle class="r" cx="720" cy="330" r="16" data-fill="blue" data-fs="solid" data-stroke="blue" data-sw="3"/><text class="t" x="750" y="336" font-size="21">merged</text><text class="t2" x="750" y="360" font-size="17">children closed explicitly</text></g>
+   <g class="stamp" data-at=".7" style="--r:-6deg"><rect class="r" x="420" y="378" width="152" height="50" data-sw="4.5"/><text class="stt" x="496" y="412" font-size="24" text-anchor="middle" fill="#1B1E23">wave 2</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num x">10x</span><span>At scale</span><code><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span class="vh">run by a person: </span>/wave-planner</code></p>
+   <h2 data-s="And it can run all of that in parallel<span class=&quot;subh&quot;>&amp;lt;Dramatic reveal SFX here&amp;gt;</span>">And we can run all that at once for an entire epic<span class="subh">&lt;Dramatic reveal SFX here&gt;</span></h2>
+   <p class="sent" data-s="Kick off a build for an epic and a planner agent works out which tickets can safely run at the same time, then sets them going side by side, each in an isolated copy of the project. Dependencies fix the order, so foundations finish before anything that needs them starts. Usually about twice as fast. Once, three times.">A multi-tasking maestro is summoned when you kick off a build for an Epic or larger ticket, ready with a plan for how it would parallelise this work safely &mdash; using isolated worktrees, run in waves that manage sequencing and conflict risks. It even gives an estimate on how much faster you'll finish the build &mdash; typically 1.5x&ndash;2x as fast, but even hit 3x once! Foundations go first, so nothing starts before it can finish.</p>
+   <button class="how" type="button" data-card="c12">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 13 ONE HUMAN -->
+<section class="st" id="s13" data-num="06" data-lay="L" data-name="The one human" style="--len:2">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A six-digit TOTP code is entered digit by digit from an authenticator app the agent has no access to. A named human signs to open the migration vault. The API waits for the vault while the site and admin app ship independently, and a thirty-minute rollback clock starts.">
+   <rect class="r" x="330" y="60" width="58" height="56" data-fill="white" data-fs="solid" data-sw="4"/><text class="t" x="359" y="99" font-size="30" text-anchor="middle">4</text>
+   <rect class="r" x="400" y="60" width="58" height="56" data-fill="white" data-fs="solid" data-sw="4"/><text class="t" x="429" y="99" font-size="30" text-anchor="middle">1</text>
+   <rect class="r" x="470" y="60" width="58" height="56" data-fill="white" data-fs="solid" data-sw="4"/><text class="t" x="499" y="99" font-size="30" text-anchor="middle">7</text>
+   <rect class="r" x="540" y="60" width="58" height="56" data-fill="white" data-fs="solid" data-sw="4"/><text class="t" x="569" y="99" font-size="30" text-anchor="middle">2</text>
+   <rect class="r" x="610" y="60" width="58" height="56" data-fill="white" data-fs="solid" data-sw="4"/><text class="t" x="639" y="99" font-size="30" text-anchor="middle">9</text>
+   <rect class="r" x="680" y="60" width="58" height="56" data-fill="white" data-fs="solid" data-sw="4"/><text class="t" x="709" y="99" font-size="30" text-anchor="middle">5</text>
+   <g class="fd" data-at=".06"><rect class="r" x="334" y="64" width="50" height="48" data-fill="ink" data-fs="hachure" data-gap="7" data-stroke="none"/></g>
+   <g class="fd" data-at=".09"><rect class="r" x="404" y="64" width="50" height="48" data-fill="ink" data-fs="hachure" data-gap="7" data-stroke="none"/></g>
+   <g class="fd" data-at=".12"><rect class="r" x="474" y="64" width="50" height="48" data-fill="ink" data-fs="hachure" data-gap="7" data-stroke="none"/></g>
+   <g class="fd" data-at=".15"><rect class="r" x="544" y="64" width="50" height="48" data-fill="ink" data-fs="hachure" data-gap="7" data-stroke="none"/></g>
+   <g class="fd" data-at=".18"><rect class="r" x="614" y="64" width="50" height="48" data-fill="ink" data-fs="hachure" data-gap="7" data-stroke="none"/></g>
+   <g class="fd" data-at=".21"><rect class="r" x="684" y="64" width="50" height="48" data-fill="ink" data-fs="hachure" data-gap="7" data-stroke="none"/></g>
+   <text class="t2" x="752" y="90" font-size="19">6-digit code (TOTP)</text>
+   <text class="tr" x="752" y="114" font-size="16">agent has no access</text>
+   <g data-at=".04"><use href="#human" x="16" y="266" width="32" height="32" style="color:var(--red-t)"/><text class="tr" x="58" y="291" font-size="21">needs a person</text>
+    <path class="r" d="M204 284 C 232 282, 252 276, 268 266" data-stroke="red" data-sw="3"/><path class="r" d="M258 264 L270 262 L268 274" data-stroke="red" data-sw="3"/></g>
+   <rect class="r" x="238" y="250" width="16" height="82" data-fill="ink" data-fs="solid" data-sw="3"/>
+   <circle class="r" cx="246" cy="250" r="10" data-fill="ink" data-fs="solid" data-sw="2.5"/>
+   <g class="rot keep" data-at=".5" style="--a0:0deg;--a1:-72deg;transform-origin:246px 250px">
+    <rect class="r" x="246" y="241" width="120" height="19" data-fill="white" data-fs="solid" data-sw="3.5"/>
+    <rect class="r" x="256" y="241" width="22" height="19" data-fill="red" data-fs="solid" data-stroke="none"/>
+    <rect class="r" x="290" y="241" width="22" height="19" data-fill="red" data-fs="solid" data-stroke="none"/>
+    <rect class="r" x="324" y="241" width="22" height="19" data-fill="red" data-fs="solid" data-stroke="none"/>
+   </g>
+   <circle class="r" cx="430" cy="330" r="95" data-fill="white" data-fs="solid" data-sw="6"/>
+   <circle class="r" cx="430" cy="330" r="68" data-sw="4"/>
+   <g class="rot keep" data-at=".56" style="--a0:0deg;--a1:135deg;transform-origin:430px 330px">
+    <line class="r" x1="430" y1="272" x2="430" y2="388" data-sw="6"/><line class="r" x1="372" y1="330" x2="488" y2="330" data-sw="6"/>
+    <circle class="r" cx="430" cy="330" r="14" data-fill="ink" data-fs="solid" data-sw="3"/>
+   </g>
+   <text class="t" x="318" y="448" font-size="23" text-anchor="end">migrate DB</text>
+   <text class="t2" x="318" y="472" font-size="17" text-anchor="end">protected environment</text>
+   <g data-at=".3"><circle class="r" cx="660" cy="280" r="26" data-sw="4.5"/><path class="r" d="M620 350 C 628 312, 692 312, 700 350" data-sw="4.5"/><text class="tr" x="660" y="382" font-size="21" text-anchor="middle">a named human</text></g>
+   <g data-at=".4"><line class="r" x1="580" y1="440" x2="800" y2="440" data-sw="2.5"/>
+    <path class="r" d="M592 430 c 8 -26 18 -30 16 -2 c -2 18 14 -20 24 -8 c 8 10 14 -26 28 -8 c 10 12 20 -4 30 -10 c 10 -6 16 10 28 2 c 8 -6 16 -2 26 -6" data-sw="3.5" data-rough=".5"/>
+    <text class="t2" x="690" y="466" font-size="17" text-anchor="middle">approved by</text></g>
+   <rect class="r" x="395" y="500" width="50" height="100" data-fill="white" data-fs="solid" data-sw="4"/>
+   <text class="t" x="380" y="562" font-size="21" text-anchor="end">API waits</text>
+   <g data-at=".7"><rect class="r" x="600" y="520" width="50" height="90" data-fill="white" data-fs="solid" data-sw="4"/><rect class="r" x="720" y="520" width="50" height="90" data-fill="white" data-fs="solid" data-sw="4"/>
+    <text class="t" x="625" y="638" font-size="19" text-anchor="middle">site</text><text class="t" x="745" y="638" font-size="19" text-anchor="middle">admin</text>
+    <text class="t2" x="685" y="666" font-size="17" text-anchor="middle">ship without waiting</text></g>
+   <g data-at=".78"><circle class="r" cx="860" cy="250" r="50" data-fill="white" data-fs="solid" data-sw="5"/><rect class="r" x="850" y="186" width="20" height="16" data-sw="3.5"/>
+    <g class="lp a-tick" style="transform-box:view-box;transform-origin:860px 250px"><line class="r" x1="860" y1="250" x2="860" y2="214" data-stroke="red" data-sw="4.5"/></g>
+    <circle cx="860" cy="250" r="5" fill="#1B1E23"/>
+    <text class="t" x="860" y="330" font-size="19" text-anchor="middle">30-minute</text><text class="t" x="860" y="352" font-size="19" text-anchor="middle">rollback window</text></g>
+   <g class="stamp" data-at=".6" style="--r:-8deg"><rect class="r" x="140" y="590" width="196" height="54" data-stroke="red" data-sw="5"/><text class="stt" x="238" y="626" font-size="24" text-anchor="middle" fill="#C22A20">approved</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">06</span><span>Release</span><code><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg><span class="vh">run by a person: </span>deploy-production</code></p>
+   <h2 data-s="A person releases to production, always<span class=&quot;subh&quot;>Agents never even see the deploy button.</span>">Humans handed the final product, to launch when ready<span class="subh">Agents never even see a Prod deploy button.</span></h2>
+   <p class="sent" data-s="People chose what to build, steered it through the pipeline, and verified it came back right. What ships to production, and when, stays our call.">Humans chose what to build, guided its journey through the agent pipeline, and verified it built what we expected. We remain in control of what gets released to Production, and only when we say so.</p>
+   <p class="sent" data-s="The agents have no route to production at all. That is for their own good. And ours.">Keeping agents isolated from any way to break Prod is for their own good. And ours.</p>
+   <button class="how" type="button" data-card="c13">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 14 NEW TRACK -->
+<section class="st" id="s14" data-num="07" data-lay="R" data-name="New track" style="--len:1.9">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="A crack in the track, where a silent failure once broke through, is patched. Guard posts are planted along the line: a rule, a hook, a check and a CI job, and later changes roll past safely.">
+   <polyline class="r" points="222,268 236,288 226,302 242,318 232,334" data-stroke="red" data-sw="5"/>
+   <ellipse class="r" cx="240" cy="304" rx="42" ry="15" data-stroke="red" data-sw="3.5"/>
+   <text class="tr" x="240" y="366" font-size="20" text-anchor="middle">silent 401,</text>
+   <text class="tr" x="240" y="390" font-size="20" text-anchor="middle">cookie dropped</text>
+   <g data-off=".28"><g class="lp a-fall"><rect class="r" x="222" y="236" width="36" height="30" data-stroke="ink2" data-sw="2.5" data-rough="1.8"/></g></g>
+   <g class="pop" data-at=".28"><rect class="r" x="188" y="288" width="104" height="30" data-fill="ink" data-fs="hachure" data-gap="6" data-sw="4"/></g>
+   <g class="pop" data-at=".35"><rect class="r" x="353" y="238" width="14" height="50" data-fill="ink" data-fs="solid" data-sw="3"/><text class="t" x="360" y="200" font-size="23" text-anchor="middle">rule</text><text class="t2" x="360" y="224" font-size="17" text-anchor="middle">before the edit</text></g>
+   <g class="pop" data-at=".42"><rect class="r" x="493" y="238" width="14" height="50" data-fill="ink" data-fs="solid" data-sw="3"/><text class="t" x="500" y="200" font-size="23" text-anchor="middle">hook</text><text class="t2" x="500" y="224" font-size="17" text-anchor="middle">at the edit</text></g>
+   <g class="pop" data-at=".49"><rect class="r" x="633" y="238" width="14" height="50" data-fill="ink" data-fs="solid" data-sw="3"/><text class="t" x="640" y="200" font-size="23" text-anchor="middle">check</text><text class="t2" x="640" y="224" font-size="17" text-anchor="middle">before commit</text></g>
+   <g class="pop" data-at=".56"><rect class="r" x="773" y="238" width="14" height="50" data-fill="ink" data-fs="solid" data-sw="3"/><text class="t" x="780" y="200" font-size="23" text-anchor="middle">CI</text><text class="t2" x="780" y="224" font-size="17" text-anchor="middle">before merge</text></g>
+   <g data-at=".6"><line class="r" x1="340" y1="248" x2="800" y2="248" data-sw="5"/></g>
+   <g data-at=".62"><g class="lp a-roll"><rect class="r" x="262" y="266" width="36" height="30" data-stroke="ink2" data-sw="2.5"/></g><g class="lp a-roll" style="animation-delay:-2.1s"><rect class="r" x="262" y="266" width="36" height="30" data-stroke="ink2" data-sw="2.5"/></g></g>
+   <g data-at=".7"><text class="t2" x="560" y="404" font-size="19" text-anchor="middle">every wisdom at that gate</text><text class="t2" x="560" y="428" font-size="19" text-anchor="middle">was once one of these</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">07</span><span data-s="Make it a rule">Codify</span><code>hooks &middot; checks &middot; ADRs</code></p>
+   <h2 data-s="Lessons learned become permanent rules<span class=&quot;subh&quot;>Learn it once, not every time.</span>">Lessons learned become new rules<span class="subh">Agents that forget root cause are doomed to repeat it.</span></h2>
+   <p class="sent" data-s="Agents track the defects they hit, fixing one-off cases as they go.">Agents keep track of defects and issues in memory, fixing novel single instances as they go.</p>
+   <p class="sent" data-s="When the same failure shows up twice, the agent proposes a rule for it: a check, a hook, or a recorded decision that catches it at build time from then on. The mistake can only be made once.">When it spots a common occurrence, the agent offers to codify a new rule &mdash; a hook, an agent check, or a decision record &mdash; that catches it at build time and stops it from ever happening again.</p>
+   <button class="how" type="button" data-card="c14">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+
+<!-- 15 CLOSED -->
+<section class="st" id="s15" data-num="08" data-lay="L" data-name="Shipped" style="--len:1.8">
+ <div class="pin">
+  <svg class="ln" aria-hidden="true"></svg>
+  <svg class="art" viewBox="0 0 1000 700" role="img" aria-label="The parcel arrives and grows so every stamp can be read, then is stamped shipped. Beside it, the list of gates it cleared.">
+   <rect class="r" x="150" y="600" width="300" height="34" data-fill="ink" data-fs="hachure" data-gap="10" data-sw="3"/>
+   <g data-at=".46"><text class="t" x="600" y="140" font-size="28">gates it cleared</text></g>
+   <g data-at=".50"><path class="r" d="M600 176 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="184" font-size="20">sized and typed</text></g>
+   <g data-at=".52"><path class="r" d="M600 210 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="218" font-size="20">split, edges declared</text></g>
+   <g data-at=".54"><path class="r" d="M600 244 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="252" font-size="20">test plan written</text></g>
+   <g data-at=".56"><path class="r" d="M600 278 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="286" font-size="20">survived the red team</text></g>
+   <g data-at=".58"><path class="r" d="M600 312 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="320" font-size="20">built by its owner</text></g>
+   <g data-at=".60"><path class="r" d="M600 346 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="354" font-size="20">security reviewed</text></g>
+   <g data-at=".62"><path class="r" d="M600 380 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="388" font-size="20">coverage reviewed</text></g>
+   <g data-at=".64"><path class="r" d="M600 414 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="422" font-size="20">twelve commit checks</text></g>
+   <g data-at=".66"><path class="r" d="M600 448 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="456" font-size="20">earned its own PR</text></g>
+   <g data-at=".68"><path class="r" d="M600 482 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="490" font-size="20">CI green</text></g>
+   <g data-at=".70"><path class="r" d="M600 516 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="524" font-size="20">seen at four corners</text></g>
+   <g data-at=".72"><path class="r" d="M600 550 l7 8 l16 -18" data-stroke="green" data-sw="4"/><text class="t2" x="634" y="558" font-size="20">merged in its wave</text></g>
+   <g data-at=".74"><path class="r" d="M600 584 l7 8 l16 -18" data-stroke="red" data-sw="4"/><use href="#human" x="632" y="572" width="26" height="26" style="color:var(--red-t)"/><text class="tr" x="666" y="592" font-size="20">a person approved</text></g>
+   <g data-at=".8"><text class="tb" x="600" y="650" font-size="25">every gate, every change</text></g>
+  </svg>
+  <div class="copy">
+   <p class="eb"><span class="num">08</span><span>Shipped</span></p>
+   <h2>Signed, sealed, delivered</h2>
+   <p class="sent" data-s="Any idea, of any size, comes out the other end as a properly specified ticket that took the shortest safe route to production.">This pipeline takes any idea, of any size or complexity, turns it into a properly specced work item, and creates a plan tailored for it to take the optimal path to Production.</p>
+   <p class="sent" data-s="Quality is built into the foundations rather than tested in at the end, cost is balanced against speed, and the whole thing runs off a handful of commands. No process guide to memorise.">It's designed to bake quality into the very foundations before any build even starts, balances managing cost with maximising velocity, and is driven by a handful of simple commands. No manual prompting steps or process guides to memorise.</p>
+   <button class="how" type="button" data-card="c15">How it works <span>&rarr;</span></button>
+  </div>
+ </div>
+</section>
+</main>
+
+<section class="outro" id="outro">
+ <svg class="outro-ln" aria-hidden="true"></svg>
+ <div class="outro-in">
+  <p class="eb"><span class="num">&#10003;</span>Below the line</p>
+  <h2>Eight key principles</h2>
+  <p class="sent" data-s="None of these were planned. Each one came from something going wrong. Listed in the order I would adopt them.">Every one was earned rather than designed. They're listed in the order they'd be worth adopting.</p>
+  <ol class="rules">
+   <li><span class="num">1</span><div><h3 data-s="Measure, never take an agent at its word">Measure, never self-report</h3><p data-s="A confident &quot;nothing was missed&quot; is worth nothing. Let the tests do the talking.">Confident declarations that nothing was missed are worthless. Let nothing but the tests do the talking.</p></div></li>
+   <li><span class="num">2</span><div><h3 data-s="Never let the author mark their own work">Author and adversary are never the same actor</h3><p data-s="Whoever reviews the work cannot be the one who did it, and cannot edit it to make a finding disappear. They get the artefact and the requirements, nothing else.">No self sign-offs, no influencing findings, no inverse incentives. The adversary gets the artefact to attack and the requirements only, with no editing access.</p></div></li>
+   <li><span class="num">3</span><div><h3 data-s="A check that always fails is useless">A gate that never passes is not a gate</h3><p data-s="With no written threshold, a reviewer blocks everything, which tells you as little as rubber-stamping. Write down what a block has to show.">With no written threshold, an adversary blocks everything, which tells you as little as rubber-stamping. Write down what a block must show.</p></div></li>
+   <li><span class="num">4</span><div><h3 data-s="Fail closed">Fail closed</h3><p data-s="Absence of a signal is not a pass. Print the reasons either way, so every refusal can be explained.">Absence of a signal is not a pass. Print the reasons either way, so every refusal can be explained.</p></div></li>
+   <li><span class="num">5</span><div><h3 data-s="Split the cheap half from the expensive half">Split the cheap half from the expensive half</h3><p data-s="Opening a pull request can be undone. Merging it cannot. Automate the first, keep a person on the second.">Opening a pull request can be undone; merging can't. Automate the first, keep a person on the second.</p></div></li>
+   <li><span class="num">6</span><div><h3 data-s="Fix the cause, not the one case">Codify the lesson, not the fix</h3><p data-s="A fix closes one instance. A rule closes the whole class. Put it at the earliest point the failure can be seen.">The fix closes one instance. The rail closes the class. Put it at the earliest point the failure can be seen.</p></div></li>
+   <li><span class="num">7</span><div><h3 data-s="One source, one direction">One write path</h3><p data-s="Every generated file has one source and one direction. The tooling refuses the wrong-way edit, so nobody has to rely on discipline.">Every derived file has one source and one direction. The tooling refuses the wrong-way edit instead of trusting discipline.</p></div></li>
+   <li><span class="num">8</span><div><h3 data-s="Context is the budget">Context is the budget</h3><p data-s="Cost grows with the square of session length, not with output. One task per session, and never poll in a loop while waiting.">Cost grows with the square of session length, not with output. One task per session, and never wait by polling.</p></div></li>
+  </ol>
+ </div>
+</section>
+<svg class="tray" aria-hidden="true"></svg>
+<footer><div>
+ <p data-s="The project itself is a booking and operations platform: a customer-facing booking site, a back-office for staff, and the shared API behind both, all in one codebase. This page is about how it gets built, not what it does.">The project is a full operations platform for a services category. It's got a React customer booking site, a staff back-office, and shared API, all in a single TypeScript monorepo. This page shows how it gets built, not what it does.</p>
+ <p>I love this stuff but I'm not an expert, and would welcome any feedback on potential gaps or new ideas!</p>
+</div></footer>
+
+<div id="parcel" aria-hidden="true"><svg viewBox="0 0 220 190">
+ <g class="pspark"><g class="lp a-pulse">
+  <line class="r" x1="110" y1="40" x2="110" y2="20" data-stroke="blue" data-sw="6"/>
+  <line class="r" x1="62" y1="86" x2="42" y2="86" data-stroke="blue" data-sw="6"/><line class="r" x1="158" y1="86" x2="178" y2="86" data-stroke="blue" data-sw="6"/>
+  <line class="r" x1="76" y1="52" x2="62" y2="38" data-stroke="blue" data-sw="6"/><line class="r" x1="144" y1="52" x2="158" y2="38" data-stroke="blue" data-sw="6"/>
+  <circle class="r" cx="110" cy="86" r="34" data-fill="white" data-fs="solid" data-stroke="blue" data-sw="6"/>
+  <path class="r" d="M97 92 q7 -18 13 0 q6 18 13 0" data-stroke="blue" data-sw="3.5"/>
+  <rect class="r" x="96" y="118" width="28" height="11" data-fill="white" data-fs="solid" data-sw="4"/>
+  <rect class="r" x="99" y="129" width="22" height="16" data-fill="ink" data-fs="solid" data-sw="3"/>
+ </g></g>
+ <g class="pbox">
+  <polygon class="r" points="136,70 186,42 186,138 136,166" data-fill="white" data-fs="solid" data-sw="5"/>
+  <polygon class="r" points="136,70 186,42 186,138 136,166" data-fill="ink" data-fs="hachure" data-gap="10" data-fw="1.2" data-stroke="none"/>
+  <polygon class="r" points="30,70 80,42 186,42 136,70" data-fill="white" data-fs="solid" data-sw="5"/>
+  <rect class="r" x="30" y="70" width="106" height="96" data-fill="white" data-fs="solid" data-sw="5"/>
+  <g class="pst" data-stamp="tag"><g class="lp a-sway"><line class="r" x1="186" y1="44" x2="197" y2="24" data-sw="2"/><polygon class="r" points="190,4 218,12 212,34 186,26" data-fill="white" data-fs="solid" data-sw="2.2"/><text class="t" x="202" y="24" font-size="11" text-anchor="middle" transform="rotate(16 202 20)">P1</text></g></g>
+  <g transform="translate(47,88)"><g class="pst" data-stamp="size"><circle class="r" cx="0" cy="0" r="11" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="4.5" font-size="12" text-anchor="middle" fill="#1B1E23">L</text></g></g>
+  <g transform="translate(99,82) rotate(-4)"><g class="pst" data-stamp="child"><rect class="r" x="-28" y="-6.5" width="56" height="13" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.4" text-anchor="middle" fill="#1B1E23">1/3 &middot; API</text></g></g>
+  <g transform="translate(54,106) rotate(3)"><g class="pst" data-stamp="plan"><rect class="r" x="-21" y="-6.5" width="42" height="13" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.4" text-anchor="middle" fill="#1B1E23">PLAN</text></g></g>
+  <g transform="translate(104,103) rotate(-6)"><g class="pst" data-stamp="redteam"><rect class="r" x="-30" y="-6.5" width="60" height="13" data-stroke="green" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.2" text-anchor="middle" fill="#16804A">RED-TEAM &#10003;</text></g></g>
+  <g transform="translate(62,124) rotate(-2)"><g class="pst" data-stamp="built"><rect class="r" x="-29" y="-6.5" width="58" height="13" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.2" text-anchor="middle" fill="#1B1E23">BY OWNER</text></g></g>
+  <g transform="translate(114,123) rotate(5)"><g class="pst" data-stamp="sec"><rect class="r" x="-17" y="-6.5" width="34" height="13" data-stroke="green" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.2" text-anchor="middle" fill="#16804A">SEC &#10003;</text></g></g>
+  <g transform="translate(46,144) rotate(-5)"><g class="pst" data-stamp="qa"><rect class="r" x="-16" y="-6.5" width="32" height="13" data-stroke="green" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.2" text-anchor="middle" fill="#16804A">QA &#10003;</text></g></g>
+  <g transform="translate(93,142) rotate(3)"><g class="pst" data-stamp="commit"><rect class="r" x="-27" y="-6.5" width="54" height="13" data-stroke="green" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.8" font-size="7.2" text-anchor="middle" fill="#16804A">COMMIT &#10003;</text></g></g>
+  <g transform="translate(84,159) rotate(-3)"><g class="pst" data-stamp="approved"><rect class="r" x="-30" y="-6" width="60" height="12" data-stroke="red" data-sw="1.8" data-rough=".8"/><text class="stt" x="0" y="2.6" font-size="7.2" text-anchor="middle" fill="#C22A20">APPROVED</text></g></g>
+  <g transform="translate(100,57) rotate(-3)"><g class="pst" data-stamp="pr"><rect class="r" x="-18" y="-5.5" width="36" height="11" data-stroke="green" data-sw="1.6" data-rough=".8"/><text class="stt" x="0" y="2.5" font-size="6.8" text-anchor="middle" fill="#16804A">PR &#10003;</text></g></g>
+  <g transform="translate(146,52) rotate(-3)"><g class="pst" data-stamp="ci"><rect class="r" x="-15" y="-5.5" width="30" height="11" data-stroke="green" data-sw="1.6" data-rough=".8"/><text class="stt" x="0" y="2.5" font-size="6.8" text-anchor="middle" fill="#16804A">CI &#10003;</text></g></g>
+  <g transform="translate(161,84) rotate(-30)"><g class="pst" data-stamp="corners"><rect class="r" x="-18" y="-6" width="36" height="12" data-stroke="green" data-sw="1.6" data-rough=".8"/><text class="stt" x="0" y="2.6" font-size="6.8" text-anchor="middle" fill="#16804A">4/4 &#10003;</text></g></g>
+  <g transform="translate(161,118) rotate(-30)"><g class="pst" data-stamp="wave"><rect class="r" x="-21" y="-6" width="42" height="12" data-sw="1.6" data-rough=".8"/><text class="stt" x="0" y="2.6" font-size="6.8" text-anchor="middle" fill="#1B1E23">WAVE 2</text></g></g>
+  <g transform="translate(84,117) rotate(-12)"><g class="pst" data-stamp="closed"><rect class="r" x="-56" y="-16" width="112" height="32" data-fill="white" data-fs="solid" data-sw="3.4" data-rough=".9"/><text class="stt" x="0" y="7" font-size="18.5" text-anchor="middle" fill="#1B1E23">SHIPPED</text></g></g>
+ </g>
+</svg></div>
+
+<nav class="rail" aria-label="Stages"></nav>
+<div class="count"><button type="button" id="prev" aria-label="Previous stage">&uarr;</button><output id="cnt">start</output><button type="button" id="next" aria-label="Next stage">&darr;</button></div>
+
+<dialog class="card" id="c1" aria-labelledby="c1h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 01 Capture</p><h3 id="c1h" data-s="Jotting it down is meant to be cheap">Capture is cheap on purpose</h3>
+ <p data-s="One sentence goes in. It writes a plain-English title, searches open issues for a near-duplicate, and files a placeholder. Nothing is planned or sized yet."><code>/idea</code> takes one sentence. It writes a plain-English title, searches open issues for a near-duplicate, opens a placeholder issue and sets its project fields. Nothing is planned or sized.</p>
+ <p data-s="Specifying costs far more than capturing, so the two are kept apart. Ideas get specified later in batches, when there is context to do several at once. An idea that has to arrive fully specified usually never arrives.">Specifying costs far more than capturing, so the two are kept apart. Ideas get specced later in batches with <code>/spec-idea</code>, when there's context to do several at once. An idea that has to arrive fully specified usually doesn't arrive.</p>
+ <ul class="gates"><li data-s="<b>Duplicate check.</b> A near match gets linked to the existing issue instead of filed twice."><b>Duplicate check.</b> A near match gets linked instead of created.</li><li data-s="<b>No issue without a home.</b> Every idea gets a priority and a milestone, placeholders at this stage, so nothing lands untriaged and quietly goes missing."><b>Field completeness.</b> No issue can be created without a priority and a milestone &mdash; the helper refuses. At capture these are placeholder defaults, so nothing lands untriaged; the real call is made at Specify.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c2" aria-labelledby="c2h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 02a Specify</p><h3 id="c2h" data-s="First an interview, then a brief">An interview, then a specification</h3>
+ <p data-s="It classifies the work first, because the type fixes the shape of the ticket. A bug needs reproduction steps. A feature needs acceptance criteria and explicit out-of-scope notes."><code>/new-ticket</code> classifies the work first (bug, feature, task, epic or decision) because the type fixes the shape of the issue. Bugs get reproduction steps and no acceptance criteria; features get criteria and explicit out-of-scope notes.</p>
+ <p data-s="Then it interviews a person. Three to seven questions, tailored to the type: what job this does, who for, where the scope stops, what done looks like. Each states why it matters and carries a recommended answer, so the reply can be a correction rather than an essay.">Then it interviews a person. Three to seven questions, tailored to the type &mdash; what job this actually does, who for, where the scope stops, what done looks like. Each one states why it matters and carries a recommended answer, so the reply can be a correction rather than an essay.</p>
+ <p data-s="">Only questions that would change the plan get asked; anything inferable from the codebase isn&rsquo;t. Answers can open follow-ups, and the refined brief is read back for confirmation before a single specialist is consulted.</p>
+ <p data-s="That interview is the specification starting to exist. What comes out of it becomes the ticket: the job to be done, the acceptance criteria, the explicit out-of-scope notes, the areas affected.">That interview is the specification starting to exist. What comes out of it becomes the ticket body: the job to be done, the acceptance criteria, the explicit out-of-scope notes, the affected areas.</p>
+ <p data-s="">Size (S, M or L) is recorded here and read again at Build, where it decides who builds the change and which reviews fire.</p>
+ <ul class="gates"><li class="hm" data-s="<b><svg class=&quot;hu&quot; viewBox=&quot;0 0 24 24&quot; aria-hidden=&quot;true&quot;><use href=&quot;#human&quot; width=&quot;24&quot; height=&quot;24&quot;/></svg>You agree the brief.</b> Nothing happens until a person has answered the questions and confirmed the summary read back to them."><b><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg>Confirmed brief.</b> Nothing is planned, sized or written until a person has answered the questions and agreed the brief read back to them.</li><li data-s="<b>Verifiable acceptance criteria.</b> Each one has to be checkable at merge time. &quot;Works well&quot; does not survive."><b>Verifiable acceptance criteria.</b> Each one must be checkable at merge time and scoped to the ticket's own layer. "Works well" doesn't survive.</li><li data-s=""><b>Real triage.</b> Priority and milestone are decided here, not inherited. The milestone is checked against the live list of open ones, and an ambiguous call is put to a person rather than guessed.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c3" aria-labelledby="c3h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 02b Decompose</p><h3 id="c3h" data-s="Say what waits on what, up front">Dependencies are declared, never inferred</h3>
+ <p data-s="Work too big for one branch becomes an epic with child tickets. Children are only created once the parent is confirmed to exist, so a run that dies halfway leaves no orphans.">Work too big for one branch becomes an epic with children. Children are only created once the parent is confirmed to exist, so a run that dies halfway leaves no orphans.</p>
+ <p data-s="Dependencies are registered as each child is created. Everything downstream reads them: the build order, which tickets can run in parallel, and which get closed at the end.">Blocked-by edges are registered as each child is created. Everything downstream reads them: ordering, parallel waves, and which children get closed at the end. By default every child is sliced from main; an integration branch is the exception, for children that must see each other before anything merges.</p>
+ <ul class="gates"><li data-s="<b>Parent exists.</b> No child ticket is created until its epic is confirmed."><b>Parent exists.</b> No child is created until its epic is confirmed.</li><li data-s="<b>Dependencies declared, not inferred.</b> An unrecorded one is a silent scheduling bug, so they are written down at creation."><b>Dependency registration.</b> An unrecorded edge would be a silent scheduling bug, so edges are written at birth.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c4" aria-labelledby="c4h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 03a Prove</p><h3 id="c4h">The plan comes before the code</h3>
+ <p data-s="At least one test is written per acceptance criterion, and they are appended to the ticket as a checklist."><code>/test-plan</code> writes at least one check per acceptance criterion and appends them to the issue as a checklist. <code>@qa-eng</code> authors it.</p>
+ <p data-s="">Acceptance criteria stay plain bullets on the ticket: they are the specification. The test plan below them is the checklist, and it is what gets ticked.</p>
+ <p data-s="Every item is automated unless it falls into one of five categories: aesthetic judgement, a real third-party service, physical hardware, cross-browser behaviour, or tooling that does not exist. Everything else has to be driven by an agent in a real browser, even when that is fiddly.">Every item is automated unless it falls into one of five categories: aesthetic judgement, a real third-party service, physical hardware, cross-browser behaviour, or tooling that doesn't exist. Everything else has to be driven by an agent in a real browser, even when that's fiddly.</p>
+ <ul class="gates"><li data-s="<b>Manual allowlist.</b> An item can only be handed to a person if it names one of those five categories."><b>Manual allowlist.</b> An item can only be handed to a person if it names one of the five categories.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c5" aria-labelledby="c5h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 03b Attack</p><h3 id="c5h" data-s="The author and the critic are never the same">Author and adversary are different seats</h3>
+ <p data-s="The reviewer works in a fresh context. It gets the ticket and the plan, never the author&#39;s reasoning, and it has no write or edit tools at all."><code>@red-team</code> reviews the plan in a fresh context. It gets the issue and the artefact, never the author's reasoning, and it has no write or edit tools.</p>
+ <p data-s="A reviewer who watched the plan being written inherits the author&#39;s frame and rationalises it. One that could edit the plan might silently create a far bigger problem by misreading the intent. One that can cheaply fix what it finds starts finding only what it can cheaply fix.">A reviewer who watched the plan being written inherits its author's frame and rationalises it. A reviewer that can edit the plan to fix issues <em>could</em> silently create much larger ones, if they mistook the intent. One that can easily fix what it finds <em>could</em> start finding only what it can cheaply fix (aka reward hacking).</p>
+ <ul class="gates"><li data-s="<b>Graded verdict.</b> Pass, revise (applied with no second round), or block. A block has to name the concrete way a requirement ships broken behind a green test suite."><b>Graded verdict.</b> PASS, REVISE (applied with no second round) or BLOCK, and a BLOCK must name the concrete way a criterion ships broken behind a green suite.</li></ul>
+ <p class="ev" data-s="The bar had to be written down. Before it was, the reviewer blocked <b>9 of 9</b> plans and every re-review blocked again, pushing median blocking time per ticket from <b>17.8</b> to <b>40.3 minutes</b>. A gate that never passes tells you as little as one that always does.">The bar had to be written down. Before it was, the adversary blocked <b>9 of 9</b> reviews and every re-review blocked again, pushing median blocking time per ticket from <b>17.8</b> to <b>40.3 minutes</b>. A gate that never passes tells you as little as one that always does.</p>
+</div></dialog>
+
+<dialog class="card" id="c6" aria-labelledby="c6h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 04a Build</p><h3 id="c6h" data-s="Fourteen specialists, each owning one area">Fourteen specialists, each owning a surface</h3>
+ <p data-s="Routing is by the size recorded at intake. Small: the orchestrator builds it. Medium: the one specialist agent that owns that area. Large: the architect writes a plan, then specialists build in parallel by layer."><code>/ticket-build</code> routes by the size recorded at intake. Small: the orchestrator builds it. Medium: the one specialist who owns that surface. Large: <code>@architect</code> writes a plan, then specialists build in parallel by layer.</p>
+ <p data-s="Boundaries are drawn by file path, not by apparent skill. An agent that reaches its edge stops and names the owner instead of guessing across it, and ownership disputes are settled as recorded decisions.">Boundaries are drawn by file path, not by skill. An agent that reaches its edge stops and names the owner instead of guessing across it, and ownership disputes land as numbered decision records.</p>
+ <div class="chips dtl"><span>@architect</span><span>@frontend-ui</span><span>@admin-ui</span><span>@ui-system</span><span>@domain-eng</span><span>@ops-api-eng</span><span>@data-eng</span><span>@payments-eng</span><span>@auth-eng</span><span>@infra-eng</span><span>@release-eng</span><span>@security-eng</span><span>@qa-eng</span><span>@red-team</span></div>
+</div></dialog>
+
+<dialog class="card" id="c7" aria-labelledby="c7h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 04b Review</p><h3 id="c7h" data-s="Reviews that start themselves">Reviews that fire on facts</h3>
+ <p data-s="The security agent fires automatically whenever a change touches the API, the database, logins, payments or cross-tenant access. It either fixes the issue directly or hands a fix spec back to the owner."><code>@security-eng</code> fires automatically whenever the diff touches the API, the database, auth, payments or cross-tenant access. It fixes directly or hands a fix spec back to the owner.</p>
+ <p data-s="The architect reviews large tickets for structural drift. The QA agent reviews coverage last: every acceptance criterion has to map to a test or an allowed manual item. Untested work is unfinished."><code>@architect</code> reviews large tickets for structural drift. <code>@qa-eng</code> reviews coverage last: every criterion must map to a test or an allowed manual item. Untested work is unfinished.</p>
+ <ul class="gates"><li data-s="<b>Security triage.</b> Triggered by file path, so it cannot be skipped by an agent that did not realise what it touched."><b>Security triage.</b> Triggered by path, so it can't be skipped by an agent that didn't realise what it touched.</li><li data-s="<b>Architecture review.</b> Large tickets only."><b>Architecture review.</b> Large tickets only.</li><li data-s="<b>Coverage review.</b> Always last, never optional."><b>Coverage review.</b> Consulted last, never optional.</li><li data-s=""><b>Local QA.</b> The relevant suites run before anything is pushed.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c8" aria-labelledby="c8h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 04c Commit</p><h3 id="c8h">Twelve checks before every commit</h3>
+ <p data-s="Four are standard: formatting and linting, documentation style, a secret scan, and a full typecheck. The other eight were written for this codebase specifically.">Four are standard: a formatter and linter, markdown lint, a secret scan and a full typecheck. Eight were written for this repository: cookie attributes on cross-site sessions, banned legacy terms, raw brand tokens, em-dashes in content, brand drift, migration-journal order, and redaction guards on two credential helpers.</p>
+ <p data-s="Each of those eight exists because that exact failure once got through with no error at all.">Each of the eight exists because a specific failure once got through with no error at all.</p>
+ <ul class="gates"><li data-s="<b>Pre-commit gate.</b> A commit that fails any one of them does not happen."><b>Pre-commit quality gate.</b> A commit that fails any check doesn't happen.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c9" aria-labelledby="c9h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 04d Ship</p><h3 id="c9h" data-s="Measure, never take an agent at its word">Measure, never self-report</h3>
+ <p data-s="Opening a pull request can be undone by closing it. Merging cannot. So an agent may open its own pull request, but only when a script, not the agent, says so.">Opening a pull request can be undone by closing it; merging can't. So an agent may open its own pull request, but only when a script, not the agent, says so.</p>
+ <p data-s="The script checks facts: a feature branch, five files or fewer, one area of the codebase, no migration, workflow, auth, payment or secrets path touched, a fully ticked test plan, and the relevant suites passing, which it runs itself rather than asking. The size recorded at intake is ignored on purpose, because the change itself is ground truth.">The script checks facts: a feature branch, five files or fewer, one workspace scope, no migration, workflow, auth, payment, brand, secrets or lockfile path, a fully checked test plan, and the relevant suites passing, which it runs itself. The ticket's recorded size is ignored on purpose, because the diff is ground truth.</p>
+ <ul class="gates"><li data-s="<b>Unsure means no.</b> Anything the script cannot determine counts as a no, and it prints its reasons either way."><b>Straight-to-PR eligibility.</b> Anything it can't determine counts as no, and it prints its reasons either way.</li><li class="hm" data-s="<b><svg class=&quot;hu&quot; viewBox=&quot;0 0 24 24&quot; aria-hidden=&quot;true&quot;><use href=&quot;#human&quot; width=&quot;24&quot; height=&quot;24&quot;/></svg>Only a person merges.</b> The script opens the pull request and stops there. A person reads the change and decides."><b><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg>Only a person merges.</b> The gate opens the pull request and stops there: a human reads the diff and decides, and an ineligible verdict stops and asks one.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c10" aria-labelledby="c10h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 05a Verify</p><h3 id="c10h" data-s="One required check, over change-scoped test suites">One required check over change-scoped suites</h3>
+ <p data-s="Path filters raise a flag per area of the codebase, and a selector picks only the test suites those paths can affect.">A should-run gate filters out noise, path filters raise a flag per area of the repo, and a selector picks only the suites those paths can affect.</p>
+ <p data-s="Everything reports into one aggregating job, and that is the only check required to merge, so suites can be added or made conditional without touching the rule. The trade-off: when expensive suites skip on most changes, an existing failure can stay hidden until one finally triggers it.">Everything reports into one aggregating job, and that's the only check branch protection requires, so suites can be added or made conditional without touching the rule. The trade-off: when expensive suites skip on most PRs, an existing failure can stay hidden until a PR finally triggers that suite.</p>
+ <ul class="gates"><li data-s="<b>CI pass.</b> The single required check for every merge."><b>CI pass.</b> The single required check for every merge.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c11" aria-labelledby="c11h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 05b Verify</p><h3 id="c11h">Nothing ticked without a recorded result</h3>
+ <p data-s="It reads the test plan off the pull request and runs every item, signing in to the preview deployment through a helper that keeps the password out of the agent&#39;s context entirely."><code>/test-run-pr</code> reads the checklist off the pull request and runs every item. It signs in to the preview through a helper that keeps the password out of the model's context entirely.</p>
+ <p data-s="Visual changes are checked at 375 and 1280 pixels, in light and dark, measuring every instance of the element rather than one. Results are written to a file, the checkboxes on the ticket are updated from it, and then a script re-checks its own work: any box it failed to tick is reported rather than passed over.">Visual changes are checked at 375 and 1280 pixels, in light and dark, measuring every instance of the element and re-checking for horizontal overflow after each resize. Results are written to a file and the checkboxes on the ticket are updated from it, then a script re-checks its own work: any box it failed to tick is reported rather than passed over.</p>
+ <p data-s="An unticked manual item stays visible on the ticket and holds it open. The pull request references the issue rather than closing it, and the ticket moves to Review so whoever is watching can see exactly what is left.">An unchecked manual item is visible on the ticket and holds it open. The pull request says <code>refs</code> instead of <code>Closes</code>, and the issue moves to Review so whoever is watching can see exactly what is left.</p>
+ <ul class="gates"><li data-s="<b>Every plan item resolved.</b> An item that could not be run blocks. Silence is never read as success."><b>Every plan item resolved.</b> An item that couldn't run blocks; silence is never read as success.</li><li data-s="<b>All four corners.</b> Both screen sizes, both colour modes."><b>Four-corner verification.</b> Both widths, both themes.</li></ul>
+ <p class="ev" data-s="Single-mode checks have produced confident false greens before. A pass only counts if you can say what would have made it fail.">Single-mode checks have produced confident false greens. A green result only counts if you can say what would have made it red.</p>
+</div></dialog>
+
+<dialog class="card" id="c12" aria-labelledby="c12h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 10x At scale</p><h3 id="c12h" data-s="Waves, isolated checkouts, and what it costs">Waves, worktrees, and what it costs</h3>
+ <p data-s="The planner estimates each ticket&#39;s footprint, then classifies the conflicts: two tickets editing the same file must be serialised, a shared consumer should be, and a declared dependency fixes the order. What is left is packed into the fewest waves."><code>/wave-planner</code> estimates each child's footprint, then classifies conflicts: the same file must be serialised, a shared consumer should be, and a declared dependency fixes the order. What's left is packed into the fewest waves.</p>
+ <p data-s="Each ticket gets its own isolated checkout and its own headless worker, so no two agents ever share a working copy or a port.">Each change gets its own git worktree and headless worker, so no two agents share a checkout or a port. Worktrees are torn down by a script that stops their dev servers first, because deleting the folder orphans them.</p>
+ <p class="ev" data-s="Cost: everything already said is re-billed on every later step, so spend grows with the square of session length. Across <b>135</b> sessions, about <b>70%</b> went on re-reading history and about <b>10%</b> on output. The lever is one task per session.">Cost: context is re-billed on every request, so spend grows with the square of session length. Across <b>135</b> transcripts, about <b>70%</b> of spend was re-reading history and about <b>10%</b> was output. The lever is one task per session.</p>
+</div></dialog>
+
+<dialog class="card" id="c13" aria-labelledby="c13h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 06 Release</p><h3 id="c13h" data-s="The last human sits on the irreversible step">The last human sits on the irreversible step</h3>
+ <p data-s="Staging deploys on every merge. Production only starts once the operator enters a live one-time code from their own authenticator app, and it runs a typecheck and build before touching anything.">Staging deploys on every merge. Production only starts when the operator enters a live TOTP (time-based one-time password) code from their own authenticator app, then runs a typecheck and build before touching anything.</p>
+ <p data-s="Database migrations run in a protected environment that requires a named reviewer&#39;s approval. Then come canary checks and a rollback decision inside 30 minutes.">The migration runs in a protected environment that exists to require a named reviewer's approval. The API deploy waits for it; the customer site and admin app don't. Then come canary checks and a rollback decision within 30 minutes, with recovery by point-in-time restore.</p>
+ <ul class="gates"><li class="hm" data-s="<b><svg class=&quot;hu&quot; viewBox=&quot;0 0 24 24&quot; aria-hidden=&quot;true&quot;><use href=&quot;#human&quot; width=&quot;24&quot; height=&quot;24&quot;/></svg>One-time code.</b> A person enters a live code from their own authenticator app, one the agent never holds, so nothing deploys by accident."><b><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg>TOTP code.</b> A person enters a live code from their authenticator app &mdash; one the agent never holds &mdash; so nothing dispatches by accident.</li><li class="hm" data-s="<b><svg class=&quot;hu&quot; viewBox=&quot;0 0 24 24&quot; aria-hidden=&quot;true&quot;><use href=&quot;#human&quot; width=&quot;24&quot; height=&quot;24&quot;/></svg>A named approver.</b> A person signs off every database migration: the one human approval left in the pipeline."><b><svg class="hu" viewBox="0 0 24 24" aria-hidden="true"><use href="#human" width="24" height="24"/></svg>Protected-environment approval.</b> A named person approves the migration: the one human approval left in the pipeline.</li><li data-s=""><b>Forward-only migrations.</b> Destructive changes need an expand-then-contract sequence or a recorded override.</li><li data-s="<b>Canary and rollback window.</b> Health checks, and an explicit call inside 30 minutes."><b>Canary and rollback window.</b> An explicit decision inside 30 minutes.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c14" aria-labelledby="c14h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 07 Codify</p><h3 id="c14h" data-s="Fix the cause, not the one case">Codify the lesson, not the fix</h3>
+ <p data-s="After every incident the question is the same: what would have caught this automatically? The answer becomes a rule the agent reads, a hook on the edit, a pre-commit check or a CI job, placed at the earliest point the failure can be seen.">After every incident the question is: what would have caught this automatically? The answer becomes a rule the agent reads, a hook on the edit, a pre-commit check or a CI job, placed at the earliest point the failure can be seen.</p>
+ <p data-s="For example, browser privacy rules were silently dropping the session cookie our API set. The response looked fine, the cookie showed up in devtools, and every later request failed with nothing in any log. That is now a committed check on every cookie the API sets.">For example, cross-site session cookies were being silently dropped by browser privacy rules. The response was accepted, the cookie showed in devtools, and every later request returned 401 with nothing in any log. That's now a committed check on every cookie the API sets.</p>
+ <ul class="gates"><li data-s="<b>Fix the workflow, not the run.</b> When a workflow fails the same way every time, the workflow gets repaired, not just the current run."><b>Fix the workflow, not the run.</b> When a workflow issues a command that fails every time, the workflow gets repaired, not just the current run.</li></ul>
+</div></dialog>
+
+<dialog class="card" id="c15" aria-labelledby="c15h"><div class="card-in"><span class="tape"></span><button class="x" type="button" aria-label="Close">&times;</button>
+ <p class="k">How it works &middot; 08 Shipped</p><h3 id="c15h" data-s="Every stamp on the box was earned">The audit trail is the character</h3>
+ <p data-s="Every stamp on the box is a gate the change cleared: sized, split with its dependencies declared, a test plan written and attacked, built by its owner, security and coverage reviewed, committed through the interlock, a pull request earned, CI green, seen at four corners, merged in its wave, and approved by a person.">Every stamp on the box is a gate the change cleared: sized, split with its edges declared, a plan written and attacked, built by its owner, reviewed on the facts, committed through the interlock, a pull request earned, CI green, seen at four corners, merged in its wave, and approved by one person.</p>
+ <p data-s="Twenty-one named gates along the line. Exactly one of them needs a human.">That's twenty-one named gates along the line. One of them needs a human.</p>
+</div></dialog>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function(){
+const R=window.rough;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MQ=matchMedia('(max-width: 760px), (max-aspect-ratio: 4/5)');
+const NS='http://www.w3.org/2000/svg';
+const COL={ink:'#1B1E23',ink2:'#4E5660',blue:'#2455F0',red:'#E03A2F',green:'#1F9D5A',white:'#FFFFFF',ghost:'#CBD2D7'};
+const col=v=>COL[v]||v;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t, ss=t=>t*t*(3-2*t);
+const sstep=(a,b,v)=>ss(clamp((v-a)/(b-a),0,1));
+const el=(t,a)=>{const e=document.createElementNS(NS,t);if(a)for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+const CFG=[
+ {lay:'L',ex:.70,vb:[1000,700],pts:[[560,330],[605,425],[655,525],[705,615]],hero:1,rest:.3},
+ {lay:'T',ex:.75,vb:[1000,460],pts:[[745,-40],[726,46],[540,74],[300,92],[120,112],[30,210],[34,400],[70,444],[133,450],[304,456],[475,458],[646,452],[817,444]],hold:[[0,0],[.1,4],[.2,7],[.3,8],[.43,9],[.56,10],[.69,11],[.82,12],[1,'e']],nop:1,rest:.88},
+ {lay:'L',ex:.55,vb:[1000,700],pts:[[518,110],[500,250],[660,255],[800,370],[830,505],[760,640]],hold:[[0,0],[.3,2],[.5,4],[.74,4],[1,'e']],born:.3,rest:.74},
+ {lay:'R',ex:.30,vb:[1000,700],pts:[[980,70],[700,110],[600,220],[600,385],[600,560],[450,660]],hold:[[0,0],[.4,3],[.64,3],[1,'e']],rest:.66},
+ {lay:'L',ex:.78,vb:[1000,700],pts:[[40,60],[300,100],[440,170],[600,240],[600,330],[600,470],[620,600],[680,690]],hold:[[0,0],[.14,1],[.3,1],[.44,4],[.52,4],[.62,5],[.8,5],[1,'e']],rest:.78},
+ {lay:'R',ex:.66,vb:[1000,700],pts:[[990,60],[640,80],[578,160],[578,340],[578,560],[800,690]],hold:[[0,0],[.25,3],[.62,3],[1,'e']],rest:.62},
+ {lay:'T',ex:.30,vb:[1000,460],pts:[[600,-40],[890,170],[500,208],[300,235],[500,288],[890,280],[500,248],[300,315],[300,400]],hold:[[0,0],[.08,1],[.16,2],[.22,3],[.34,3],[.4,4],[.46,5],[.54,5],[.62,6],[.68,7],[.8,7],[1,'e']],rest:.76},
+ {lay:'R',ex:.84,vb:[1000,700],pts:[[481,60],[480,200],[480,330],[480,500],[520,640],[700,690]],hold:[[0,0],[.15,1],[.32,1],[.48,3],[.76,3],[1,'e']],rest:.76},
+ {lay:'T',ex:.22,vb:[1000,460],pts:[[880,-40],[860,60],[800,235],[650,300],[500,392],[350,300],[200,235],[150,360],[160,440]],hold:[[0,0],[.18,2],[.42,2],[.52,4],[.62,6],[.88,6],[1,'e']],rest:.88},
+ {lay:'L',ex:.68,vb:[1000,700],pts:[[60,40],[200,130],[250,330],[390,330],[520,480],[480,640]],hold:[[0,0],[.18,2],[.28,3],[.72,3],[1,'e']],rest:.74},
+ {lay:'R',ex:.50,vb:[1000,700],pts:[[980,30],[425,55],[425,330],[360,540],[380,640],[520,690]],hold:[[0,0],[.15,2],[.42,2],[.52,3],[.74,3],[1,'e']],rest:.74},
+ {lay:'L',ex:.62,vb:[1000,700],pts:[[150,40],[330,110],[380,205],[390,400],[420,560],[480,690]],hold:[[0,0],[.18,2],[.3,3],[.74,3],[1,'e']],rest:.74},
+ {lay:'R',ex:.74,vb:[1000,700],pts:[[980,50],[640,90],[620,230],[650,360],[650,560],[700,690]],hold:[[0,0],[.2,3],[.72,3],[1,'e']],rest:.72},
+ {lay:'T',ex:.56,vb:[1000,460],pts:[[700,-40],[640,70],[400,120],[380,200],[620,200],[720,330],[700,430]],hold:[[0,0],[.18,3],[.55,4],[.66,5],[.8,5],[1,'e']],rest:.8},
+ {lay:'L',ex:.70,vb:[1000,700],pts:[[259,40],[250,146],[264,172],[430,330],[420,545],[450,650]],hold:[[0,0],[.18,2],[.54,2],[.64,3],[.76,3],[.86,4],[1,'e']],rest:.86},
+ {lay:'R',ex:.30,vb:[1000,700],pts:[[980,50],[600,80],[120,160],[140,300],[240,300],[820,300],[860,450],[700,620]],hold:[[0,0],[.2,3],[.62,3],[.8,5],[1,'e']],rest:.8},
+ {lay:'L',ex:.50,vb:[1000,700],pts:[[60,40],[250,120],[300,330],[300,560],[420,690]],hold:[[0,0],[.3,2],[1,2]],tail:.86,finale:1,rest:.9}
+];
+const STAMPS={tag:[3,.6],size:[3,.55],child:[4,.7],plan:[5,.56],redteam:[6,.68],built:[7,.7],sec:[8,.36],qa:[8,.82],commit:[9,.7],pr:[10,.68],ci:[11,.68],corners:[12,.66],wave:[13,.7],approved:[14,.6],closed:[16,.56]};
+
+const secs=[...document.querySelectorAll('.st')];
+const S=secs.map((sec,i)=>Object.assign({sec,pin:sec.querySelector('.pin'),svg:sec.querySelector('.ln'),art:sec.querySelector('.art'),lp:-1},CFG[i]));
+const parcel=document.getElementById('parcel');
+if(reduce) document.documentElement.classList.add('rm');
+
+/* hand-drawn conversion */
+let seed=1;
+function roughen(root){
+ if(!R) return;
+ root.querySelectorAll('svg').forEach(svg=>{
+  const items=svg.querySelectorAll('.r'); if(!items.length) return;
+  const rc=R.svg(svg);
+  items.forEach(e=>{
+   const d=e.dataset, o={roughness:+(d.rough||1.05),bowing:.9,stroke:d.stroke==='none'?'none':col(d.stroke||'ink'),strokeWidth:+(d.sw||4.5),disableMultiStroke:true,disableMultiStrokeFill:true,seed:seed++};
+   if(d.fill){o.fill=col(d.fill);o.fillStyle=d.fs||'hachure';o.hachureGap=+(d.gap||8);o.fillWeight=+(d.fw||1.8);o.hachureAngle=-41;}
+   const n=k=>+e.getAttribute(k), t=e.tagName.toLowerCase(); let g;
+   try{
+    if(t==='rect') g=rc.rectangle(n('x'),n('y'),n('width'),n('height'),o);
+    else if(t==='circle') g=rc.circle(n('cx'),n('cy'),n('r')*2,o);
+    else if(t==='ellipse') g=rc.ellipse(n('cx'),n('cy'),n('rx')*2,n('ry')*2,o);
+    else if(t==='line') g=rc.line(n('x1'),n('y1'),n('x2'),n('y2'),o);
+    else if(t==='polyline'||t==='polygon'){const p=e.getAttribute('points').trim().split(/\s+/).map(q=>q.split(',').map(Number));g=t==='polygon'?rc.polygon(p,o):rc.linearPath(p,o);}
+    else if(t==='path') g=rc.path(e.getAttribute('d'),o);
+   }catch(err){return;}
+   if(!g) return;
+   e.classList.remove('r');
+   const c=e.getAttribute('class'); if(c) g.setAttribute('class',c);
+   ['transform','style'].forEach(a=>{if(e.hasAttribute(a))g.setAttribute(a,e.getAttribute(a));});
+   ['at','off','stamp'].forEach(k=>{if(d[k]!=null)g.dataset[k]=d[k];});
+   g.querySelectorAll('path').forEach(p=>{const f=p.getAttribute('fill');if(!f||f==='none'){p.setAttribute('pathLength','1');p.classList.add('dr');p.setAttribute('stroke-linecap','round');p.setAttribute('stroke-linejoin','round');}});
+   e.replaceWith(g);
+  });
+ });
+}
+roughen(document);
+const TOK={'#1b1e23':'--ink','#4e5660':'--ink-2','#2455f0':'--blue','#e03a2f':'--red','#c22a20':'--red-t','#1f9d5a':'--green','#16804a':'--green-t','#ffffff':'--card','#cbd2d7':'--ghost'};
+function tokenise(root){root.querySelectorAll('[fill],[stroke]').forEach(e=>{if(e.closest('mask'))return;['fill','stroke'].forEach(a=>{const v=TOK[(e.getAttribute(a)||'').toLowerCase()];if(v)e.style.setProperty(a,`var(${v})`);});});}
+tokenise(document);
+S.forEach(st=>{st.beats=[...st.sec.querySelectorAll('[data-at],[data-off]')].map(e=>{e.classList.add('bt');return {el:e,at:parseFloat(e.dataset.at||0),off:e.dataset.off!=null?parseFloat(e.dataset.off):null,on:null};});});
+
+/* ambient doodles: margins only, one colour no content uses */
+const DD=['d-ring','d-plus','d-tri','d-dots','d-sq','d-zig'];
+const POS={L:[[2.5,11],[36,90],[39,5]],R:[[61,6],[95.5,88],[57,92]],T:[[95.5,8],[2.5,94],[62,29]]};
+S.forEach((st,i)=>(POS[st.lay]||POS.L).forEach((p,j)=>{const s=el('svg',{class:'dd','aria-hidden':'true'});const sz=16+((i*7+j*5)%3)*6;s.style.cssText=`left:${p[0]}%;top:${p[1]}%;width:${sz}px;height:${sz}px;animation-delay:${-((i*3+j*4)%11)}s`;const u=el('use',{href:'#'+DD[(i*2+j)%DD.length]});s.appendChild(u);st.pin.appendChild(s);}));
+
+/* line geometry */
+const msvg=el('svg',{'aria-hidden':'true'});msvg.style.cssText='position:absolute;width:0;height:0;overflow:hidden';const meas=el('path');msvg.appendChild(meas);document.body.appendChild(msvg);
+const plen=d=>{meas.setAttribute('d',d);return meas.getTotalLength();};
+const f1=v=>v.toFixed(1);
+function crSegs(P){const out=[];for(let i=0;i<P.length-1;i++){const p0=P[i-1]||P[i],p1=P[i],p2=P[i+1],p3=P[i+2]||P[i+1];out.push(`C${f1(p1[0]+(p2[0]-p0[0])/6)},${f1(p1[1]+(p2[1]-p0[1])/6)} ${f1(p2[0]-(p3[0]-p1[0])/6)},${f1(p2[1]-(p3[1]-p1[1])/6)} ${f1(p2[0])},${f1(p2[1])}`);}return out;}
+function wobble(d,T,amp,ph){
+ meas.setAttribute('d',d);const n=Math.max(8,Math.ceil(T/9)),pts=[];
+ for(let j=0;j<=n;j++){const q=meas.getPointAtLength(T*j/n);pts.push([q.x,q.y]);}
+ const out=pts.map((p,j)=>{const a=pts[Math.max(0,j-1)],b=pts[Math.min(n,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const L=Math.hypot(tx,ty)||1;tx/=L;ty/=L;const s=T*j/n,tp=Math.min(clamp((s-150)/150,0,1),clamp((T-s-150)/150,0,1));const w=amp*tp*(Math.sin(s/41+ph)*.55+Math.sin(s/17+ph*1.7)*.3+Math.sin(s/113+ph*.6)*.5);return [p[0]-ty*w,p[1]+tx*w];});
+ let o=`M${f1(out[0][0])},${f1(out[0][1])}`;
+ for(let j=1;j<out.length-1;j++){o+=`Q${f1(out[j][0])},${f1(out[j][1])} ${f1((out[j][0]+out[j+1][0])/2)},${f1((out[j][1]+out[j+1][1])/2)}`;}
+ const e=out[out.length-1];return o+`L${f1(e[0])},${f1(e[1])}`;
+}
+function boxFor(lay,W,H,mob){
+ if(mob) return {x:.03*W,y:.44*H,w:.94*W,h:.53*H};
+ if(lay==='L') return {x:.42*W,y:.07*H,w:.54*W,h:.86*H};
+ if(lay==='R') return {x:.04*W,y:.07*H,w:.54*W,h:.86*H};
+ return {x:.04*W,y:.37*H,w:.92*W,h:.6*H};
+}
+function ensureLine(st,i){
+ if(st.ink) return;
+ const defs=el('defs'),m=el('mask',{id:'lm'+i,maskUnits:'userSpaceOnUse'}),mk=el('path',{fill:'none',stroke:'#fff','stroke-linecap':'round','stroke-linejoin':'round'});
+ m.appendChild(mk);defs.appendChild(m);st.svg.appendChild(defs);
+ const guide=el('path',{class:'guide'});st.svg.appendChild(guide);
+ const g=el('g',{mask:`url(#lm${i})`}),ink=el('path',{class:'ink'}),streak=el('path',{class:'streak'});g.append(ink,streak);st.svg.appendChild(g);
+ Object.assign(st,{mask:m,mk,guide,ink,streak});
+}
+function build(i){
+ const st=S[i],mob=MQ.matches,W=innerWidth,H=st.pin.clientHeight||innerHeight;
+ ensureLine(st,i);
+ const box=boxFor(mob?'T':st.lay,W,H,mob);
+ const cp=st.sec.querySelector('.copy'),cBot=cp.offsetTop+cp.offsetHeight;
+ if(mob)box.h=Math.min(box.h,H-58-box.y);
+ if(mob||st.lay==='T'){const cb=cBot+(mob?14:18);if(cb>box.y){box.h=Math.max(H*(mob?.18:.3),box.y+box.h-cb);box.y=cb;}}
+ const noArt=mob&&(H-58-(cBot+14))<H*.18;st.art.style.visibility=noArt?'hidden':'';
+ const[vw,vh]=st.vb,s=Math.min(box.w/vw,box.h/vh),ox=box.x+(box.w-vw*s)/2,oy=box.y+(box.h-vh*s)/2;
+ Object.assign(st.art.style,{left:ox+'px',top:oy+'px',width:vw*s+'px',height:vh*s+'px'});
+ const P=[];let first=0;
+ const en=i>0?(mob?.925:S[i-1].ex):null,ex=mob?.925:st.ex;
+ if(en!=null){P.push([en*W,-90],[en*W,-24],[en*W,34]);if(mob)P.push([en*W,Math.max(.4*H,cBot+10)]);first=P.length;}
+ if(!noArt)st.pts.forEach(p=>P.push([ox+p[0]*s,oy+p[1]*s]));
+ if(mob)P.push([ex*W,H*.985-34]);
+ P.push([ex*W,H-34],[ex*W,H+24],[ex*W,H+90]);
+ const segs=crSegs(P),cum=[0];
+ for(let k=0;k<segs.length;k++)cum.push(cum[k]+plen(`M${f1(P[k][0])},${f1(P[k][1])} ${segs[k]}`));
+ const T=cum[cum.length-1],d=wobble(`M${f1(P[0][0])},${f1(P[0][1])} ${segs.join(' ')}`,T,mob?1.6:2.4,i*1.93);
+ st.svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+ Object.entries({x:-400,y:-400,width:W+800,height:H+800}).forEach(([k,v])=>st.mask.setAttribute(k,v));
+ [st.guide,st.ink,st.streak,st.mk].forEach(p=>p.setAttribute('d',d));
+ st.ink.setAttribute('stroke-width',mob?10:15);st.mk.setAttribute('stroke-width',mob?17:25);
+ const L=st.ink.getTotalLength();st.L=L;st.cum=cum.map(c=>c*L/T);st.first=first;
+ st.mk.style.strokeDasharray=`${L} ${L}`;
+ if(st.finale){st.big=Math.min(box.w*(mob?.6:.44),box.h*.62,420)/(parcel.offsetWidth||96);}
+ st.lp=-1;
+}
+function lenAt(st,p){
+ const h=st.hold||[[0,0],[1,'e']],last=st.cum.length-1,I=k=>k==='e'?last:Math.min(last,k+st.first);
+ if(p<=h[0][0])return st.cum[I(h[0][1])];
+ for(let j=0;j<h.length-1;j++){const a=h[j],b=h[j+1];if(p<=b[0]){const t=ss(clamp((p-a[0])/Math.max(1e-6,b[0]-a[0]),0,1));return lerp(st.cum[I(a[1])],st.cum[I(b[1])],t);}}
+ return st.cum[I(h[h.length-1][1])];
+}
+function applyStage(i,p){
+ const st=S[i];if(!st.L)return;
+ let rev=st.hero?st.L*(.2+.8*ss(p)):lenAt(st,p);
+ if(st.tail&&p>st.tail)rev=Math.max(rev,lerp(lenAt(st,st.tail),st.L,(p-st.tail)/(1-st.tail)));
+ st.mk.style.strokeDashoffset=f1(st.L-rev);st.mk.style.visibility=rev<2?'hidden':'visible';
+ st.beats.forEach(b=>{const on=p>=b.at&&(b.off==null||p<b.off);if(on!==b.on){b.on=on;b.el.classList.toggle('on',on);}});
+}
+
+/* the protagonist */
+const earned=(k,o,p)=>{const [s,a]=STAMPS[k];return o>s||(o===s&&p>=a);};
+function paintParcel(node,o,p){
+ node.querySelectorAll('[data-stamp]').forEach(e=>e.classList.toggle('got',earned(e.dataset.stamp,o,p)));
+ const box=o>3||(o===3&&p>=.47),b=node.querySelector('.pbox'),sp=node.querySelector('.pspark');
+ b.style.opacity=box?1:0;b.style.transform=box?'scale(1)':'scale(.4)';
+ sp.style.opacity=box?0:1;sp.style.transform=box?'scale(.3)':'scale(1)';
+}
+function placeParcel(o,p){
+ const st=S[o],show=!st.hero&&!st.nop&&!(st.born!=null&&p<st.born);
+ parcel.style.opacity=show?1:0;if(!show)return;
+ const pt=st.ink.getPointAtLength(lenAt(st,p)),top=st.pin.getBoundingClientRect().top,pw=parcel.offsetWidth,ph=parcel.offsetHeight;
+ let sc=1,rot=0;if(st.finale){const k=sstep(.3,.52,p);sc=lerp(1,st.big||3,k);rot=-5*k;}
+ parcel.style.transform=`translate(${f1(pt.x-pw/2)}px,${f1(pt.y+top-ph/2)}px) scale(${sc.toFixed(3)}) rotate(${rot.toFixed(2)}deg)`;
+ paintParcel(parcel,o,p);
+}
+function staticParcels(){
+ document.querySelectorAll('.pstatic').forEach(n=>n.remove());
+ const tpl=parcel.innerHTML;
+ S.forEach((st,i)=>{if(st.hero||st.nop)return;const n=document.createElement('div');n.className='pstatic';n.setAttribute('aria-hidden','true');n.innerHTML=tpl;st.pin.appendChild(n);
+  const pt=st.ink.getPointAtLength(lenAt(st,st.rest)),pw=n.offsetWidth,ph=n.offsetHeight;
+  n.style.left=f1(pt.x-pw/2)+'px';n.style.top=f1(pt.y-ph/2)+'px';if(st.finale)n.style.transform=`scale(${(st.big||3).toFixed(3)}) rotate(-5deg)`;paintParcel(n,i,st.rest);});
+}
+
+/* navigation */
+const rail=document.querySelector('.rail'),cnt=document.getElementById('cnt');
+const pad=i=>String(i).padStart(2,'0');
+const dots=S.map((st,i)=>{const b=document.createElement('button');b.type='button';const name=(i&&st.sec.dataset.num?st.sec.dataset.num+' · ':'')+st.sec.dataset.name;b.setAttribute('aria-label',name);b.innerHTML='<span></span>';b.firstChild.textContent=name;b.addEventListener('click',()=>goTo(i));rail.appendChild(b);return b;});
+let cur=-1;
+function setNav(i){if(i===cur)return;cur=i;dots.forEach((d,j)=>j===i?d.setAttribute('aria-current','step'):d.removeAttribute('aria-current'));const n=S[i].sec.dataset.num||'';cnt.textContent=!i?'start':(n?(n.endsWith('x')?n:n+' / 08'):S[i].sec.dataset.name.toLowerCase());}
+function goTo(i){i=clamp(i,0,S.length-1);const st=S[i],top=st.sec.getBoundingClientRect().top+scrollY,range=st.sec.offsetHeight-innerHeight;scrollTo({top:top+(reduce?0:range*st.rest),behavior:reduce?'auto':'smooth'});}
+document.getElementById('prev').addEventListener('click',()=>goTo(cur-1));
+document.getElementById('next').addEventListener('click',()=>goTo(cur+1));
+addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||e.metaKey||e.ctrlKey||e.altKey)return;if(e.key==='ArrowRight'||e.key==='j'){e.preventDefault();goTo(cur+1);}else if(e.key==='ArrowLeft'||e.key==='k'){e.preventDefault();goTo(cur-1);}});
+document.querySelectorAll('[data-card]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.card).showModal()));
+document.querySelectorAll('dialog.card').forEach(d=>{d.querySelector('.x').addEventListener('click',()=>d.close());d.addEventListener('click',e=>{if(e.target===d)d.close();});});
+
+/* outro: the line ends in the marker's cap */
+function outro(){
+ const svg=document.querySelector('.outro-ln');if(!svg)return;
+ const W=innerWidth,mob=MQ.matches,x=(mob?.925:S[S.length-1].ex)*W;svg.setAttribute('viewBox',`0 0 ${W} 230`);svg.textContent='';
+ svg.appendChild(el('path',{d:`M${f1(x)},-12 L${f1(x)},138`,fill:'none',stroke:COL.blue,'stroke-width':mob?10:15,'stroke-linecap':'round'}));
+ if(!R)return;const rc=R.svg(svg),o={stroke:COL.ink,roughness:1,disableMultiStroke:true};
+ const flip=mob?-1:1;
+ const capG=el('g',{transform:`translate(${f1(x-flip*50)},172) scale(${flip},1) rotate(-6)`});
+ svg.appendChild(capG);
+ capG.appendChild(rc.rectangle(0,-37,90,74,Object.assign({fill:COL.blue,fillStyle:'solid',strokeWidth:5,seed:771},o)));
+ capG.appendChild(rc.rectangle(16,-54,12,20,Object.assign({fill:COL.blue,fillStyle:'solid',strokeWidth:3.5,seed:772},o)));
+ capG.appendChild(rc.rectangle(84,-30,12,60,Object.assign({fill:COL.white,fillStyle:'solid',strokeWidth:3.5,seed:773},o)));
+ capG.appendChild(rc.rectangle(96,-37,250,74,Object.assign({fill:COL.white,fillStyle:'solid',strokeWidth:5.5,seed:774},o)));
+ capG.appendChild(rc.rectangle(104,-37,70,74,Object.assign({fill:COL.blue,fillStyle:'hachure',hachureGap:10,strokeWidth:0,stroke:'none',seed:775},o)));
+ capG.appendChild(rc.rectangle(184,-31,152,62,Object.assign({fill:COL.white,fillStyle:'solid',stroke:COL.blue,strokeWidth:3.5,seed:776},o)));
+ capG.appendChild(rc.rectangle(346,-33,36,66,Object.assign({fill:COL.blue,fillStyle:'solid',strokeWidth:4.5,seed:777},o)));
+ const lbl=el('g',{transform:'translate(260,0)'+(mob?' scale(-1,1)':'')});
+ const t1=el('text',{class:'tk',x:0,y:-3,'font-size':20,'font-weight':700,'text-anchor':'middle'});t1.textContent='WHITEBOARD';
+ const t2=el('text',{class:'tk',x:3,y:17,'font-size':13,'font-weight':700,'letter-spacing':6,'text-anchor':'middle'});t2.textContent='MARKER';
+ lbl.append(t1,t2);capG.appendChild(lbl);
+ const t=el('text',{x:f1(mob?x-72:x+62),y:196,class:'tb','font-size':26,'text-anchor':mob?'end':'start'});t.textContent='capped.';svg.appendChild(t);
+ tokenise(svg);
+}
+
+/* the board's bottom edge: a pen tray, with the marker put away in it */
+function tray(){
+ const svg=document.querySelector('.tray');if(!svg)return;
+ const W=innerWidth,mob=MQ.matches,H=mob?72:92,ty=mob?40:54,lip=mob?24:31,top=mob?9:11;
+ svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.textContent='';
+ if(!R){
+  svg.appendChild(el('rect',{x:0,y:ty,width:W,height:lip,fill:COL.white,stroke:COL.ink,'stroke-width':4}));
+  tokenise(svg);return;
+ }
+ const rc=R.svg(svg),o={stroke:COL.ink,roughness:1,disableMultiStroke:true};
+ /* what's resting in the channel, drawn first so the ledge overlaps its feet */
+ const g=el('g',{transform:`translate(${f1(W/2-(mob?146:234))},${ty+(mob?6:8)})`});svg.appendChild(g);
+ g.appendChild(rc.rectangle(0,-42,96,30,Object.assign({fill:COL.white,fillStyle:'solid',strokeWidth:4.2,seed:811},o)));
+ g.appendChild(rc.rectangle(0,-14,96,19,Object.assign({fill:COL.ink,fillStyle:'hachure',hachureGap:8,fillWeight:1.2,strokeWidth:3.4,seed:812},o)));
+ g.appendChild(rc.rectangle(132,-24,124,24,Object.assign({fill:COL.white,fillStyle:'solid',strokeWidth:3.8,seed:813},o)));
+ g.appendChild(rc.rectangle(142,-24,13,24,Object.assign({fill:COL.blue,fillStyle:'solid',stroke:'none',strokeWidth:0,seed:814},o)));
+ g.appendChild(rc.rectangle(256,-27,36,30,Object.assign({fill:COL.blue,fillStyle:'solid',strokeWidth:3.8,seed:815},o)));
+ if(!mob){
+  g.appendChild(rc.rectangle(322,-21,114,21,Object.assign({fill:COL.white,fillStyle:'solid',strokeWidth:3.6,seed:816},o)));
+  g.appendChild(rc.rectangle(436,-24,33,27,Object.assign({fill:COL.red,fillStyle:'solid',strokeWidth:3.6,seed:817},o)));
+ }
+ /* the ledge, edge to edge: solid face, shaded along its lower half */
+ svg.appendChild(rc.rectangle(-8,ty,W+16,top,Object.assign({fill:COL.white,fillStyle:'solid',strokeWidth:mob?4:5,seed:801},o)));
+ svg.appendChild(rc.rectangle(-8,ty+top,W+16,lip-top,Object.assign({fill:COL.ghost,fillStyle:'solid',strokeWidth:mob?4:5,seed:803},o)));
+ tokenise(svg);
+}
+
+/* frame */
+let ticking=false;
+function frame(){
+ ticking=false;const H=innerHeight,rects=S.map(st=>st.sec.getBoundingClientRect());
+ document.documentElement.classList.toggle('sc',scrollY>40);
+ if(reduce){let o=0;rects.forEach((r,i)=>{if(r.top<=H*.5)o=i;});setNav(o);return;}
+ let o=-1,p=0;
+ for(let i=0;i<S.length;i++){const r=rects[i];if(r.top<=.5&&r.bottom>=H-.5){o=i;p=clamp(-r.top/Math.max(1,r.height-H),0,1);break;}}
+ if(o<0)for(let i=0;i<S.length;i++){const r=rects[i];if(r.top>0&&r.top<H){o=i;p=0;break;}}
+ if(o<0){o=S.length-1;p=1;}
+ for(let i=0;i<S.length;i++){const q=i<o?1:i>o?0:p;if(Math.abs(q-S[i].lp)>1e-4){S[i].lp=q;applyStage(i,q);}}
+ S.forEach((st,i)=>st.sec.classList.toggle('live',i===o||(i===o-1&&rects[i].bottom>0)));
+ placeParcel(o,p);setNav(o);
+}
+addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(frame);}},{passive:true});
+function layoutAll(){
+ S.forEach((st,i)=>build(i));outro();tray();
+ if(reduce){S.forEach((st,i)=>{st.lp=1;applyStage(i,1);});staticParcels();}
+ frame();
+}
+layoutAll();
+const KEY=document.querySelector('.key'),KQ=matchMedia('(max-width:760px),(max-aspect-ratio:4/5),(max-height:860px)');
+if(KEY){const syncKey=()=>{if(KQ.matches){if(!KEY.dataset.t)KEY.open=false;}else KEY.open=true;};
+ KEY.addEventListener('toggle',()=>{if(KQ.matches)KEY.dataset.t='1';});
+ syncKey();if(KQ.addEventListener)KQ.addEventListener('change',()=>{delete KEY.dataset.t;syncKey();});}
+const TH=document.getElementById('theme'),root=document.documentElement,DQ=matchMedia('(prefers-color-scheme: dark)');
+function syncTheme(){const d=root.getAttribute('data-theme'),m=d==='dark'||d==='light'?d:(DQ.matches?'dark':'light');root.setAttribute('data-mode',m);
+ if(TH){const next=m==='dark'?'light':'dark';TH.setAttribute('aria-label',`Switch to ${next} mode`);TH.querySelector('.tl').textContent=next==='dark'?'Dark':'Light';}}
+if(TH){TH.addEventListener('click',()=>{const m=root.getAttribute('data-mode')==='dark'?'light':'dark';root.setAttribute('data-theme',m);try{localStorage.setItem('pathTheme',m);}catch(e){}syncTheme();});
+ if(DQ.addEventListener)DQ.addEventListener('change',syncTheme);
+ new MutationObserver(syncTheme).observe(root,{attributes:true,attributeFilter:['data-theme']});syncTheme();}
+/* detail level: plain english vs the technical write-up */
+const LV=document.querySelector('.lvl'),TECH=new WeakMap();
+function applyLevel(){
+ const plain=root.getAttribute('data-lv')==='plain';let changed=false;
+ document.querySelectorAll('[data-s]').forEach(e=>{
+  if(!TECH.has(e))TECH.set(e,e.innerHTML);
+  const drop=plain&&e.dataset.s==='';
+  if(e.hidden!==drop){e.hidden=drop;changed=true;}
+  if(drop)return;
+  const html=plain?e.dataset.s:TECH.get(e);
+  if(e.innerHTML!==html){e.innerHTML=html;changed=true;}
+ });
+ if(LV)LV.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.lv==='plain')===plain)));
+ if(changed)layoutAll();
+}
+if(LV)LV.addEventListener('click',e=>{
+ const b=e.target.closest('button[data-lv]');if(!b||b.dataset.lv===root.getAttribute('data-lv'))return;
+ root.setAttribute('data-lv',b.dataset.lv);try{localStorage.setItem('pathLevel',b.dataset.lv);}catch(err){}
+ applyLevel();
+});
+applyLevel();
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(layoutAll,120);});
+if(MQ.addEventListener)MQ.addEventListener('change',layoutAll);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layoutAll);
+})();
+</script>
+
+</body></html>
