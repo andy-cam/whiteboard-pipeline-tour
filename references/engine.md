@@ -85,6 +85,14 @@ spans roughly 6% to 39% of the width, R copy 61% to 94%, T copy 6% to 60% at the
 Good starting values: before an L stage `.55`–`.8`; before an R stage `.2`–`.45`.
 On phones every stage enters and exits at 92.5% so the line runs down the right edge.
 
+The engine joins the seams itself. All the stages' points form one Catmull-Rom curve:
+each pin edge is a point on it at exactly `ex`, and both stages steer through it
+using the same neighbours (the previous stage's last point and the next stage's
+first), so the line crosses at the same place and heading on both sides at any
+viewport. Do not draw a stage's line any other way, and do not add stubs at the
+edges: per-stage smoothing near the edges is what made the seams drift apart
+before. `verify.mjs` measures every seam.
+
 **hold.** Progress through the stage is 0 to 1. `hold` decides how much of the line
 is drawn, and where the parcel sits, at each progress value; positions between
 entries are eased. Point indexes count this stage's own `pts` from 0 (the entry stub

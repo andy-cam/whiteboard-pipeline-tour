@@ -48,6 +48,7 @@ Iterate with `--quick`, then do a full run before calling the page done.
 | copy fits the screen | Copy runs past the bottom at some viewport | Shorten that stage's copy, or move detail to its card. Adding CSS should be the last resort. |
 | copy clears the pager | Copy overlaps the bottom-right pager | Same: the stage has too much copy for short screens. |
 | no sideways scroll | The page scrolls horizontally | Something is wider than the viewport, usually a long unbroken word or code chip. |
+| line meets at every seam | A stage's line leaves its bottom edge more than 1.5px from where the next stage's (or the outro's) line enters, at any viewport or reading level. A WARN means the two sides' headings differ by more than 12 degrees | The engine joins seams itself, so this means `build`, `layout` or `crSegs` was edited, or a stage was given its own line outside the engine. Restore the engine from the template. |
 | illustrations shown (warn) | Art dropped on a normal phone for lack of room | Expected occasionally on small phones. If it happens on many stages, the copy is too long. |
 
 The layout matrix covers five desktop sizes (1600×900 down to 780×600), four phones

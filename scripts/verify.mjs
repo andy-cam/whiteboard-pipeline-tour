@@ -32,6 +32,11 @@ fs.mkdirSync(OUT, { recursive: true });
 const MIN_TOP_GAP = 16;   // px between the fixed toolbar and the first line of copy.
                           // 9px was reported as "almost touching"; 20+ reads as intended.
 const SETTLE = 90, FADE = 450;
+const SEAM_DX = 1.5;      // px. Where one stage hands the line to the next (and the last to the
+                          // outro), both sides must cross the pin edge at the same x. Desktop
+                          // seams drifted 10-65px apart, growing with screen size, before the
+                          // engine ran one spline through every seam.
+const SEAM_ANGLE = 12;    // degrees between the two sides' directions at a seam.
 
 /* Phrases from the template's sample content. If any survive, the page is still
    partly someone else's pipeline. */
@@ -174,6 +179,35 @@ await main.context().close();
   await rm.context().close();
 }
 
+/* Where each stage's line crosses its pin's bottom edge vs where the next stage's crosses its top
+   (and the last stage's vs the outro's start): x and heading on both sides. */
+const seams = pg => pg.evaluate(() => {
+  const cross = (path, Y, fromEnd) => {
+    const L = path.getTotalLength(), n = 1500; let prev = null;
+    const idx = [...Array(n + 1).keys()]; if (fromEnd) idx.reverse();
+    for (const j of idx) {
+      const s = L * j / n, p = path.getPointAtLength(s);
+      if (prev && (prev.p.y - Y) * (p.y - Y) <= 0 && prev.p.y !== p.y) {
+        const t = (Y - prev.p.y) / (p.y - prev.p.y), sc = prev.s + (s - prev.s) * t;
+        const a = path.getPointAtLength(Math.max(0, sc - 3)), b = path.getPointAtLength(Math.min(L, sc + 3));
+        return { x: prev.p.x + (p.x - prev.p.x) * t, ang: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI };
+      }
+      prev = { p, s };
+    }
+    return null;
+  };
+  const secs = [...document.querySelectorAll('.st')], out = [];
+  const ink = s => s.querySelector('.ln .ink'), H = s => s.querySelector('.pin').clientHeight;
+  for (let i = 0; i < secs.length; i++) {
+    const a = cross(ink(secs[i]), H(secs[i]), true);
+    const nx = secs[i + 1], op = document.querySelector('.outro-ln path');
+    const b = nx ? cross(ink(nx), 0, false) : op ? cross(op, .001, false) : null;
+    if (!nx && !op) continue;
+    out.push({ at: secs[i].id + '>' + (nx ? nx.id : 'outro'), dx: a && b ? Math.abs(a.x - b.x) : Infinity, da: a && b ? Math.abs(a.ang - b.ang) : Infinity });
+  }
+  return out;
+});
+
 /* ================================================================ 6. layout matrix */
 const DESKTOP = QUICK ? [[1280, 800]] : [[1600, 900], [1280, 800], [1024, 768], [900, 650], [780, 600]];
 const MOBILE = QUICK ? [[390, 844]] : [[430, 932], [390, 844], [360, 740], [320, 568], [768, 1024]];
@@ -200,6 +234,9 @@ for (const [w, h] of [...DESKTOP, ...MOBILE]) {
       if (m.hs) fail('no sideways scroll', `${w}x${h} ${lv}: page scrolls horizontally at ${st.stages[i].id}`);
     }
     const tag = `${w}x${h} ${lv}`;
+    const sm = await seams(pg), badDx = sm.filter(q => q.dx > SEAM_DX), badA = sm.filter(q => q.dx <= SEAM_DX && q.da > SEAM_ANGLE);
+    if (badDx.length) fail('line meets at every seam', `${tag}: ${badDx.map(q => `${q.at} ${Number.isFinite(q.dx) ? q.dx.toFixed(1) + 'px' : 'no crossing'}`).join(', ')}`);
+    if (badA.length) warn('line meets at every seam', `${tag}: heading changes at ${badA.map(q => `${q.at} ${q.da.toFixed(0)}deg`).join(', ')}`);
     layoutRows.push(`${tag.padEnd(16)} gap ${String(Math.round(worstGap)).padStart(4)}px (${gapAt})  bottom ${String(Math.round(worstOver)).padStart(5)}px (${overAt})${pager.length ? '  PAGER:' + pager.join(',') : ''}${artHidden ? `  art hidden on ${artHidden}` : ''}`);
     if (worstGap < MIN_TOP_GAP) fail('copy clears the toolbar', `${tag}: ${Math.round(worstGap)}px at ${gapAt} (need >= ${MIN_TOP_GAP})`);
     if (worstOver > 0) fail('copy fits the screen', `${tag}: runs ${Math.round(worstOver)}px past the bottom at ${overAt}`);
@@ -209,6 +246,7 @@ for (const [w, h] of [...DESKTOP, ...MOBILE]) {
   if (pg._errors.length) fail('page errors', `${w}x${h}: ${pg._errors[0]}`);
   await pg.context().close();
 }
+if (!results.some(r => r.level === 'FAIL' && r.check === 'line meets at every seam')) pass('line meets at every seam', `within ${SEAM_DX}px at every viewport and reading level`);
 if (!results.some(r => r.level === 'FAIL' && /copy (clears|fits)/.test(r.check))) pass('layout matrix', `${DESKTOP.length + MOBILE.length} viewports x ${st.hasLvl ? 2 : 1} reading levels, every stage`);
 
 /* ================================================================ 7. screenshots: four corners */

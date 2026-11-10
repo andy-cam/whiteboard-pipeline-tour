@@ -994,11 +994,17 @@ S.forEach((st,i)=>(POS[st.lay]||POS.L).forEach((p,j)=>{const s=el('svg',{class:'
 const msvg=el('svg',{'aria-hidden':'true'});msvg.style.cssText='position:absolute;width:0;height:0;overflow:hidden';const meas=el('path');msvg.appendChild(meas);document.body.appendChild(msvg);
 const plen=d=>{meas.setAttribute('d',d);return meas.getTotalLength();};
 const f1=v=>v.toFixed(1);
-function crSegs(P){const out=[];for(let i=0;i<P.length-1;i++){const p0=P[i-1]||P[i],p1=P[i],p2=P[i+1],p3=P[i+2]||P[i+1];out.push(`C${f1(p1[0]+(p2[0]-p0[0])/6)},${f1(p1[1]+(p2[1]-p0[1])/6)} ${f1(p2[0]-(p3[0]-p1[0])/6)},${f1(p2[1]-(p3[1]-p1[1])/6)} ${f1(p2[0])},${f1(p2[1])}`);}return out;}
-function wobble(d,T,amp,ph){
+/* Catmull-Rom through P. A knot flagged [x,y,1] is held vertical (heading down), with handles a third of the way to each neighbour, so a turn into it is a rounded corner, not a knot of overshoot */
+function crSegs(P){
+ const out=[],D=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
+ const h=(i,sd)=>{const p=P[i],q=P[i+sd];if(p[2]&&q)return [0,sd*D(p,q)/3];const a=P[i-1]||p,b=P[i+1]||p;return [sd*(b[0]-a[0])/6,sd*(b[1]-a[1])/6];};
+ for(let i=0;i<P.length-1;i++){const p1=P[i],p2=P[i+1],c1=h(i,1),c2=h(i+1,-1);out.push(`C${f1(p1[0]+c1[0])},${f1(p1[1]+c1[1])} ${f1(p2[0]+c2[0])},${f1(p2[1]+c2[1])} ${f1(p2[0])},${f1(p2[1])}`);}
+ return out;
+}
+function wobble(d,T,amp,ph,sA,sB){
  meas.setAttribute('d',d);const n=Math.max(8,Math.ceil(T/9)),pts=[];
  for(let j=0;j<=n;j++){const q=meas.getPointAtLength(T*j/n);pts.push([q.x,q.y]);}
- const out=pts.map((p,j)=>{const a=pts[Math.max(0,j-1)],b=pts[Math.min(n,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const L=Math.hypot(tx,ty)||1;tx/=L;ty/=L;const s=T*j/n,tp=Math.min(clamp((s-150)/150,0,1),clamp((T-s-150)/150,0,1));const w=amp*tp*(Math.sin(s/41+ph)*.55+Math.sin(s/17+ph*1.7)*.3+Math.sin(s/113+ph*.6)*.5);return [p[0]-ty*w,p[1]+tx*w];});
+ const out=pts.map((p,j)=>{const a=pts[Math.max(0,j-1)],b=pts[Math.min(n,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const L=Math.hypot(tx,ty)||1;tx/=L;ty/=L;const s=T*j/n,tp=Math.min(clamp((s-sA-150)/150,0,1),clamp((sB-s-150)/150,0,1));const w=amp*tp*(Math.sin(s/41+ph)*.55+Math.sin(s/17+ph*1.7)*.3+Math.sin(s/113+ph*.6)*.5);return [p[0]-ty*w,p[1]+tx*w];});
  let o=`M${f1(out[0][0])},${f1(out[0][1])}`;
  for(let j=1;j<out.length-1;j++){o+=`Q${f1(out[j][0])},${f1(out[j][1])} ${f1((out[j][0]+out[j+1][0])/2)},${f1((out[j][1]+out[j+1][1])/2)}`;}
  const e=out[out.length-1];return o+`L${f1(e[0])},${f1(e[1])}`;
@@ -1017,7 +1023,7 @@ function ensureLine(st,i){
  const g=el('g',{mask:`url(#lm${i})`}),ink=el('path',{class:'ink'}),streak=el('path',{class:'streak'});g.append(ink,streak);st.svg.appendChild(g);
  Object.assign(st,{mask:m,mk,guide,ink,streak});
 }
-function build(i){
+function layout(i){
  const st=S[i],mob=MQ.matches,W=innerWidth,H=st.pin.clientHeight||innerHeight;
  ensureLine(st,i);
  const box=boxFor(mob?'T':st.lay,W,H,mob);
@@ -1027,33 +1033,49 @@ function build(i){
  const noArt=mob&&(H-58-(cBot+14))<H*.18;st.art.style.visibility=noArt?'hidden':'';
  const[vw,vh]=st.vb,s=Math.min(box.w/vw,box.h/vh),ox=box.x+(box.w-vw*s)/2,oy=box.y+(box.h-vh*s)/2;
  Object.assign(st.art.style,{left:ox+'px',top:oy+'px',width:vw*s+'px',height:vh*s+'px'});
+ const core=[],pre=i>0&&mob?1:0;
+ if(pre)core.push([.925*W,Math.max(.4*H,cBot+10),1]);
+ if(!noArt)st.pts.forEach(p=>core.push([ox+p[0]*s,oy+p[1]*s]));
+ if(mob)core.push([.925*W,H*.985-34,1]);
+ Object.assign(st,{mob,W,H,box,core,pre});
+}
+/* One Catmull-Rom spline runs through the whole page. Each pin edge is a knot at exactly
+   en/ex, and its neighbours are the real points either side of the seam (the previous
+   stage's last point above, the next stage's first point below), so both stages agree on
+   where the line crosses and which way it is heading, at any viewport. */
+/* the knots either side of a seam, kept on their own side of the edge (art can overhang a short screen) */
+const seamTail=st=>{const t=st.core[st.core.length-1];return [t[0],Math.min(t[1],st.H-24),t[2]];};
+const seamHead=st=>{const h=st.core[0];return [h[0],Math.max(h[1],1),h[2]];};
+function build(i){
+ const st=S[i],prev=S[i-1],next=S[i+1],{mob,W,H}=st,ex=(mob?.925:st.ex)*W,core=st.core;
  const P=[];let first=0;
- const en=i>0?(mob?.925:S[i-1].ex):null,ex=mob?.925:st.ex;
- if(en!=null){P.push([en*W,-90],[en*W,-24],[en*W,34]);if(mob)P.push([en*W,Math.max(.4*H,cBot+10)]);first=P.length;}
- if(!noArt)st.pts.forEach(p=>P.push([ox+p[0]*s,oy+p[1]*s]));
- if(mob)P.push([ex*W,H*.985-34]);
- P.push([ex*W,H-34],[ex*W,H+24],[ex*W,H+90]);
+ if(prev){const t=seamTail(prev);P.push([t[0],t[1]-prev.H],[(mob?.925:prev.ex)*W,0]);
+  const hd=seamHead(st);if(hd[1]!==core[0][1])P.push(hd);first=P.length+st.pre;}
+ P.push(...core);
+ const tl=seamTail(st);if(tl[1]!==core[core.length-1][1])P.push(tl);
+ P.push([ex,H]);const iC=P.length-1;
+ if(next){const h=seamHead(next);P.push([h[0],h[1]+H]);}else P.push([ex,H+90]);
  const segs=crSegs(P),cum=[0];
  for(let k=0;k<segs.length;k++)cum.push(cum[k]+plen(`M${f1(P[k][0])},${f1(P[k][1])} ${segs[k]}`));
- const T=cum[cum.length-1],d=wobble(`M${f1(P[0][0])},${f1(P[0][1])} ${segs.join(' ')}`,T,mob?1.6:2.4,i*1.93);
+ const T=cum[cum.length-1],d=wobble(`M${f1(P[0][0])},${f1(P[0][1])} ${segs.join(' ')}`,T,mob?1.6:2.4,i*1.93,prev?cum[1]:0,cum[iC]);
  st.svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
  Object.entries({x:-400,y:-400,width:W+800,height:H+800}).forEach(([k,v])=>st.mask.setAttribute(k,v));
  [st.guide,st.ink,st.streak,st.mk].forEach(p=>p.setAttribute('d',d));
  st.ink.setAttribute('stroke-width',mob?10:15);st.mk.setAttribute('stroke-width',mob?17:25);
- const L=st.ink.getTotalLength();st.L=L;st.cum=cum.map(c=>c*L/T);st.first=first;
+ const L=st.ink.getTotalLength();st.L=L;st.cum=cum.map(c=>c*L/T);st.first=first;st.eIdx=iC;
  st.mk.style.strokeDasharray=`${L} ${L}`;
- if(st.finale){st.big=Math.min(box.w*(mob?.6:.44),box.h*.62,420)/(parcel.offsetWidth||96);}
+ if(st.finale){const box=st.box;st.big=Math.min(box.w*(mob?.6:.44),box.h*.62,420)/(parcel.offsetWidth||96);}
  st.lp=-1;
 }
 function lenAt(st,p){
- const h=st.hold||[[0,0],[1,'e']],last=st.cum.length-1,I=k=>k==='e'?last:Math.min(last,k+st.first);
+ const h=st.hold||[[0,0],[1,'e']],E=st.eIdx,I=k=>k==='e'?E:Math.min(E,k+st.first);
  if(p<=h[0][0])return st.cum[I(h[0][1])];
  for(let j=0;j<h.length-1;j++){const a=h[j],b=h[j+1];if(p<=b[0]){const t=ss(clamp((p-a[0])/Math.max(1e-6,b[0]-a[0]),0,1));return lerp(st.cum[I(a[1])],st.cum[I(b[1])],t);}}
  return st.cum[I(h[h.length-1][1])];
 }
 function applyStage(i,p){
  const st=S[i];if(!st.L)return;
- let rev=st.hero?st.L*(.2+.8*ss(p)):lenAt(st,p);
+ let rev=st.hero?st.cum[st.eIdx]*(.2+.8*ss(p)):lenAt(st,p);
  if(st.tail&&p>st.tail)rev=Math.max(rev,lerp(lenAt(st,st.tail),st.L,(p-st.tail)/(1-st.tail)));
  st.mk.style.strokeDashoffset=f1(st.L-rev);st.mk.style.visibility=rev<2?'hidden':'visible';
  st.beats.forEach(b=>{const on=p>=b.at&&(b.off==null||p<b.off);if(on!==b.on){b.on=on;b.el.classList.toggle('on',on);}});
@@ -1100,7 +1122,8 @@ document.querySelectorAll('dialog.card').forEach(d=>{d.querySelector('.x').addEv
 function outro(){
  const svg=document.querySelector('.outro-ln');if(!svg)return;
  const W=innerWidth,mob=MQ.matches,x=(mob?.925:S[S.length-1].ex)*W;svg.setAttribute('viewBox',`0 0 ${W} 230`);svg.textContent='';
- svg.appendChild(el('path',{d:`M${f1(x)},-12 L${f1(x)},138`,fill:'none',stroke:COL.blue,'stroke-width':mob?10:15,'stroke-linecap':'round'}));
+ const lst=S[S.length-1],lt=seamTail(lst),sg=crSegs([[lt[0],lt[1]-lst.H],[x,0],[x,90],[x,138]]);
+ svg.appendChild(el('path',{d:`M${f1(x)},0 ${sg.slice(1).join(' ')}`,fill:'none',stroke:COL.blue,'stroke-width':mob?10:15,'stroke-linecap':'round'}));
  if(!R)return;const rc=R.svg(svg),o={stroke:COL.ink,roughness:1,disableMultiStroke:true};
  const flip=mob?-1:1;
  const capG=el('g',{transform:`translate(${f1(x-flip*50)},172) scale(${flip},1) rotate(-6)`});
@@ -1163,7 +1186,7 @@ function frame(){
 }
 addEventListener('scroll',()=>{if(!ticking){ticking=true;requestAnimationFrame(frame);}},{passive:true});
 function layoutAll(){
- S.forEach((st,i)=>build(i));outro();tray();
+ S.forEach((st,i)=>layout(i));S.forEach((st,i)=>build(i));outro();tray();
  if(reduce){S.forEach((st,i)=>{st.lp=1;applyStage(i,1);});staticParcels();}
  frame();
 }
